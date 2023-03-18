@@ -205,6 +205,7 @@ file(GLOB_RECURSE BUSTUB_LINT_FILES
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/test/*.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/test/*.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test/*.hpp"
         )
 
 # Balancing act: cpplint.py takes a non-trivial time to launch,
