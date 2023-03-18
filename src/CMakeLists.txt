@@ -1,5 +1,5 @@
 
-include_directories(${PROJECT_SOURCE_DIR}/third_party/libfort/lib)
+include(${PROJECT_SOURCE_DIR}/third_party/libfort/lib/fort.hpp)
 add_subdirectory(binder)
 add_subdirectory(buffer)
 add_subdirectory(catalog)
