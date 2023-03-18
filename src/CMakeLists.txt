@@ -1,3 +1,5 @@
+
+include_directories(${PROJECT_SOURCE_DIR}/third_party/libfort/lib)
 add_subdirectory(binder)
 add_subdirectory(buffer)
 add_subdirectory(catalog)

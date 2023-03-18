@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 include(GoogleTest)
+include_directories(${PROJECT_SOURCE_DIR}/third_party/libfort/lib)
 
 file(GLOB_RECURSE BUSTUB_TEST_SOURCES "${PROJECT_SOURCE_DIR}/test/*/*test.cpp")
 

@@ -1,3 +1,5 @@
+
+include_directories(${PROJECT_SOURCE_DIR}/third_party/libfort/lib)
 set(SHELL_SOURCES shell.cpp)
 add_executable(shell ${SHELL_SOURCES})
 
