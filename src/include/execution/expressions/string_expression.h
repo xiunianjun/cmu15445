@@ -49,17 +49,17 @@ class StringExpression : public AbstractExpression {
     std::string res;
     switch (expr_type_) {
       case bustub::StringExpressionType::Upper:
-        for (auto it1 = val.begin(); it1 != val.end(); it1++) {
+        for (char it1 : val) {
           // res = res.append(std::toupper(*it1));
-          int tmp = std::toupper(*it1);
-          res = res.append((char *)(&tmp));
+          int tmp = std::toupper(it1);
+          res = res.append(reinterpret_cast<char *>(&tmp));
         }
         break;
       case bustub::StringExpressionType::Lower:
-        for (auto it1 = val.begin(); it1 != val.end(); it1++) {
+        for (char it1 : val) {
           // res = res.append(std::tolower(*it1));
-          int tmp = std::tolower(*it1);
-          res = res.append((char *)(&tmp));
+          int tmp = std::tolower(it1);
+          res = res.append(reinterpret_cast<char *>(&tmp));
         }
         break;
       default:
