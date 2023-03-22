@@ -29,33 +29,32 @@ void TrieStore::Put(std::string_view key, T value) {
   // You will need to ensure there is only one writer at a time. Think of how you can achieve this.
   // The logic should be somehow similar to `TrieStore::Get`.
 
+  write_lock_.lock();
   root_lock_.lock();
   Trie tmp = root_;
   root_lock_.unlock();
 
-  write_lock_.lock();
   Trie new_trie = tmp.Put(key, std::move(value));
-  write_lock_.unlock();
 
   root_lock_.lock();
   root_ = new_trie;
   root_lock_.unlock();
+  write_lock_.unlock();
 }
 
 void TrieStore::Remove(std::string_view key) {
   // You will need to ensure there is only one writer at a time. Think of how you can achieve this.
   // The logic should be somehow similar to `TrieStore::Get`.
+  write_lock_.lock();
   root_lock_.lock();
   Trie tmp = root_;
   root_lock_.unlock();
 
-  write_lock_.lock();
   Trie new_trie = tmp.Remove(key);
-  write_lock_.unlock();
-
   root_lock_.lock();
   root_ = new_trie;
   root_lock_.unlock();
+  write_lock_.unlock();
 }
 
 // Below are explicit instantiation of template functions.
