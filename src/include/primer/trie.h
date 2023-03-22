@@ -100,12 +100,12 @@ class TrieNodeWithValue : public TrieNode {
 class Trie {
  private:
   // The root of the trie.
-  std::shared_ptr<const TrieNode> root_{nullptr};
 
   // Create a new trie with the given root.
   explicit Trie(std::shared_ptr<const TrieNode> root) : root_(std::move(root)) {}
 
  public:
+  std::shared_ptr<const TrieNode> root_{nullptr};
   // Create an empty trie.
   Trie() = default;
 

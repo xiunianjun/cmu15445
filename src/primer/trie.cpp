@@ -1,36 +1,40 @@
 #include "primer/trie.h"
+#include <iostream>
 #include <string_view>
 #include "common/exception.h"
 
 namespace bustub {
 
-  // Get the value associated with the given key.
-  // 1. If the key is not in the trie, return nullptr.
-  // 2. If the key is in the trie but the type is mismatched, return nullptr.
-  // 3. Otherwise, return the value.
+// Get the value associated with the given key.
+// 1. If the key is not in the trie, return nullptr.
+// 2. If the key is in the trie but the type is mismatched, return nullptr.
+// 3. Otherwise, return the value.
 template <class T>
 auto Trie::Get(std::string_view key) const -> const T * {
-  std::shared_ptr<const TrieNode> t(root_);
-  for(uint64_t i = 0;i < key.length(); i++){
-      auto it = t->children_.find(key.at(i));
-      if(it == t->children_.end()){
-	  return nullptr;
-      }
-      t = it->second;
-      //t = std::shared_ptr<const TrieNode>(it->second);
+  if (root_ == nullptr) {
+    return nullptr;
   }
-  if(!(t->is_value_node_)){
+  std::shared_ptr<const TrieNode> t = root_;
+
+  for (uint64_t i = 0; !(key.empty()) && i < key.length(); i++) {
+    auto it = t->children_.find(key.at(i));
+    if (it == t->children_.end()) {
       return nullptr;
+    }
+    t = it->second;
+    // t = std::shared_ptr<const TrieNode>(it->second);
   }
-  return nullptr;
-  // auto tmp = std::dynamic_pointer_cast<TrieNodeWithValue<T>>(t);
-  //if (!tmp) {
-  //    return nullptr;
-  //}
-  //if (typeid(tmp->value_) != typeid(T)) {
-  //    return nullptr;
-  //}
-  //return tmp->value_.get();
+  if (!(t->is_value_node_)) {
+    return nullptr;
+  }
+  auto tmp = dynamic_cast<const TrieNodeWithValue<T> *>(t.get());
+  if (!tmp) {
+    return nullptr;
+  }
+  // if (typeid(tmp->value_) != typeid(T)) {
+  //     return nullptr;
+  // }
+  return tmp->value_.get();
 
   // You should walk through the trie to find the node corresponding to the key. If the node doesn't exist, return
   // nullptr. After you find the node, you should use `dynamic_cast` to cast it to `const TrieNodeWithValue<T> *`. If
@@ -38,48 +42,66 @@ auto Trie::Get(std::string_view key) const -> const T * {
   // Otherwise, return the value.
 }
 
-  // Put a new key-value pair into the trie. If the key already exists, overwrite the value.
-  // Returns the new trie.
+// Put a new key-value pair into the trie. If the key already exists, overwrite the value.
+// Returns the new trie.
 template <class T>
 auto Trie::Put(std::string_view key, T value) const -> Trie {
   // Note that `T` might be a non-copyable type. Always use `std::move` when creating `shared_ptr` on that value.
-  std::shared_ptr<TrieNode> root = std::shared_ptr<TrieNode>(root_->Clone());
-  //std::shared_ptr<TrieNode> root = std::shared_ptr<TrieNode>(std::move(root_->Clone()));
-  std::shared_ptr<TrieNode> t(root);
-  
-  for(uint64_t i = 0;i < key.length(); i++){
-      auto it = t->children_.find(key.at(i));
-      if(it == t->children_.end()){
-          if(i != key.length() - 1){
-	      std::shared_ptr<TrieNode> tmp(new TrieNode());
-	      //std::shared_ptr<TrieNode> tmp(new TrieNode(key.at(i)));
-	      t->children_.insert(std::make_pair(key.at(i),tmp));
-              t = tmp;
-              //t.reset(tmp);
-              //t = std::shared_ptr<TrieNode>(tmp);
-	  }else{
-              std::shared_ptr<TrieNodeWithValue<T>> tmp = std::make_shared<TrieNodeWithValue<T>>(std::make_shared<T>(std::move(value)));
-              //std::shared_ptr<TrieNodeWithValue> tmp(new TrieNodeWithValue<T>(key.at(i),std::move(value)));
-	      t->children_.insert(std::make_pair(key.at(i),tmp));
-              //t.reset(tmp);
-              t = tmp;
-              //t = std::shared_ptr<TrieNode>(tmp);
-	  }
-      }else{
-          if(i == key.length() - 1){
-	      //if(it->second.is_value_node){
-                //  auto *tmp = dynamic_cast<TrieNodeWithValue<T> *>(t.get());
-                  // if(tmp->value_ == value)	break;
-	      //}
-	      std::shared_ptr<TrieNodeWithValue<T>> node = std::make_shared<TrieNodeWithValue<T>>(it->second->children_,std::make_shared<T>(std::move(value)));
-	      //std::shared_ptr<TrieNodeWithValue<T>> node = std::make_shared<TrieNodeWithValue<T>>(it->second->children_,std::shared_ptr<T>(std::move(value)));
-	      t->children_.erase(key.at(i));
-	      t->children_.insert(std::make_pair(key.at(i),node));
-              //t = std::shared_ptr<TrieNode>(node);
-              //t.reset(node);
-              t = node;
-	  }
+  std::shared_ptr<TrieNode> root;
+  if (root_ != nullptr) {
+    root = std::shared_ptr<TrieNode>(root_->Clone());
+  } else {
+    root = std::shared_ptr<TrieNode>(new TrieNode());
+  }
+
+  if (key.empty()) {
+    std::shared_ptr<TrieNodeWithValue<T>> node =
+        std::make_shared<TrieNodeWithValue<T>>(root_->children_, std::make_shared<T>(std::move(value)));
+    Trie res(node);
+    return res;
+  }
+
+  // std::shared_ptr<TrieNode> root = std::shared_ptr<TrieNode>(std::move(root_->Clone()));
+  std::shared_ptr<TrieNode> t = root;
+
+  for (uint64_t i = 0; i < key.length(); i++) {
+    auto it = t->children_.find(key.at(i));
+    if (it == t->children_.end()) {
+      if (i != key.length() - 1) {
+        std::shared_ptr<TrieNode> tmp(new TrieNode());
+        // std::shared_ptr<TrieNode> tmp(new TrieNode(key.at(i)));
+        t->children_.insert(std::make_pair(key.at(i), tmp));
+        t = tmp;
+        // t.reset(tmp);
+        // t = std::shared_ptr<TrieNode>(tmp);
+      } else {
+        std::shared_ptr<TrieNodeWithValue<T>> tmp(new TrieNodeWithValue(std::make_shared<T>(std::move(value))));
+        //    std::make_shared<TrieNodeWithValue<T>>(std::make_shared<T>(std::move(value)));
+        t->children_.insert(std::make_pair(key.at(i), tmp));
+        t = tmp;
       }
+    } else {
+      if (i == key.length() - 1) {
+        // if(it->second.is_value_node){
+        //   auto *tmp = dynamic_cast<TrieNodeWithValue<T> *>(t.get());
+        //  if(tmp->value_ == value)	break;
+        //}
+        std::shared_ptr<TrieNodeWithValue<T>> node =
+            std::make_shared<TrieNodeWithValue<T>>(it->second->children_, std::make_shared<T>(std::move(value)));
+        // std::shared_ptr<TrieNodeWithValue<T>> node =
+        // std::make_shared<TrieNodeWithValue<T>>(it->second->children_,std::shared_ptr<T>(std::move(value)));
+        t->children_.erase(key.at(i));
+        t->children_.insert(std::make_pair(key.at(i), node));
+        // t = std::shared_ptr<TrieNode>(node);
+        // t.reset(node);
+        t = node;
+      } else {
+        std::shared_ptr<TrieNode> node = std::shared_ptr<TrieNode>(it->second->Clone());
+        t->children_.erase(key.at(i));
+        t->children_.insert(std::make_pair(key.at(i), node));
+        t = node;
+      }
+    }
   }
   Trie res(root);
   return res;
@@ -87,53 +109,62 @@ auto Trie::Put(std::string_view key, T value) const -> Trie {
   // exists, you should create a new `TrieNodeWithValue`.
 }
 
-  bool RemoveHelper(std::shared_ptr<TrieNode> prev,std::shared_ptr<TrieNode> root, std::string_view key, uint64_t i) {
-  //bool RemoveHelper(std::shared_ptr<TrieNode>* new_root,std::shared_ptr<TrieNode> prev,std::shared_ptr<const TrieNode> root, std::string_view key, uint64_t i) {
-    auto node = root->children_.find(key.at(i));
-    if (node == root->children_.end()){
-      return false;
-    }
-    bool flag = false;
-    if (i != key.length() - 1) {
-      std::shared_ptr<TrieNode> tmp = std::shared_ptr<TrieNode>(node->second->Clone());
-      root->children_.erase(key.at(i));
-      root->children_.insert(std::make_pair(key.at(i), tmp));
-      flag = RemoveHelper(prev,tmp, key, i + 1);
-      //flag = RemoveHelper(root,node, key, i + 1);
-    } else {
-      if (node->second->is_value_node_) {
-        if (!node->second->children_.empty()) {
-	  std::shared_ptr<TrieNode> tmp = std::shared_ptr<TrieNode>(node->second->Clone());
-	  //std::shared_ptr<TrieNode> tmp = std::shared_ptr<TrieNode>(std::move(node->Clone()));
-	  root->children_.erase(key.at(i));
-	  root->children_.insert(std::make_pair(key.at(i), tmp));
-	  //root->children_.insert(std::make_pair(key.at(i), std::move(tmp)));
-        } else {
-	  root->children_.erase(key.at(i));
-        }
-        return true;
+bool RemoveHelper(std::shared_ptr<TrieNode> prev, std::shared_ptr<TrieNode> root, std::string_view key, uint64_t i) {
+  // bool RemoveHelper(std::shared_ptr<TrieNode>* new_root,std::shared_ptr<TrieNode> prev,std::shared_ptr<const
+  // TrieNode> root, std::string_view key, uint64_t i) {
+  auto node = root->children_.find(key.at(i));
+  if (node == root->children_.end()) {
+    return false;
+  }
+  bool flag = false;
+  if (i != key.length() - 1) {
+    bool tmp_val = node->second->is_value_node_;
+    std::shared_ptr<TrieNode> tmp = std::shared_ptr<TrieNode>(node->second->Clone());
+    tmp->is_value_node_ = tmp_val;
+    root->children_.erase(key.at(i));
+    root->children_.insert(std::make_pair(key.at(i), tmp));
+    flag = RemoveHelper(prev, tmp, key, i + 1);
+    // flag = RemoveHelper(root,node, key, i + 1);
+  } else {
+    if (node->second->is_value_node_) {
+      if (!node->second->children_.empty()) {
+        std::shared_ptr<TrieNode> tmp = std::shared_ptr<TrieNode>(node->second->Clone());
+        tmp->is_value_node_ = false;
+        // std::shared_ptr<TrieNode> tmp = std::shared_ptr<TrieNode>(std::move(node->Clone()));
+        root->children_.erase(key.at(i));
+        root->children_.insert(std::make_pair(key.at(i), tmp));
+        // root->children_.insert(std::make_pair(key.at(i), std::move(tmp)));
+      } else {
+        root->children_.erase(key.at(i));
       }
-      return false;
+      return true;
     }
-    auto tmp = root->children_.find(key.at(i));
-    if (tmp != root->children_.end() && !(tmp->second->is_value_node_) && (tmp->second->children_.empty())) {
-      root->children_.erase(key.at(i));
-    }
-    return flag;
+    return false;
+  }
+  auto tmp = root->children_.find(key.at(i));
+  if (tmp != root->children_.end() && !(tmp->second->is_value_node_) && (tmp->second->children_.empty())) {
+    root->children_.erase(key.at(i));
+  }
+  return flag;
+}
+
+// Remove the key from the trie. If the key does not exist, return the original trie.
+// Otherwise, returns the new trie.
+auto Trie::Remove(std::string_view key) const -> Trie {
+  if (key.empty()) {
+    return *this;
   }
 
-  // Remove the key from the trie. If the key does not exist, return the original trie.
-  // Otherwise, returns the new trie.
-auto Trie::Remove(std::string_view key) const -> Trie {
-    std::shared_ptr<TrieNode> new_root = std::shared_ptr<TrieNode>(root_->Clone());
-    std::shared_ptr<TrieNode> prev = nullptr;
-    //std::shared_ptr<TrieNode> new_root = std::shared_ptr<TrieNode>(std::move(root_->Clone()));
-    bool res = RemoveHelper(prev,new_root,key,0);
-    if(res){
-	Trie res_trie(new_root);
-	return res_trie;
-    }
+  if (root_ == nullptr) {
     return *this;
+  }
+  std::shared_ptr<TrieNode> new_root = std::shared_ptr<TrieNode>(root_->Clone());
+  std::shared_ptr<TrieNode> prev = nullptr;
+  // std::shared_ptr<TrieNode> new_root = std::shared_ptr<TrieNode>(std::move(root_->Clone()));
+  RemoveHelper(prev, new_root, key, 0);
+
+  Trie res_trie(new_root);
+  return res_trie;
 
   // You should walk through the trie and remove nodes if necessary. If the node doesn't contain a value any more,
   // you should convert it to `TrieNode`. If a node doesn't have children any more, you should remove it.

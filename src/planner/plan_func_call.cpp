@@ -37,9 +37,18 @@ auto Planner::PlanFuncCall(const BoundFuncCall &expr, const std::vector<Abstract
 auto Planner::GetFuncCallFromFactory(const std::string &func_name, std::vector<AbstractExpressionRef> args)
     -> AbstractExpressionRef {
   // 1. check if the parsed function name is "lower" or "upper".
+  if (func_name.compare("lower") != 0 && func_name.compare("upper") != 0) {
+    throw Exception(fmt::format("func call {} not supported in planner yet", func_name));
+  }
   // 2. verify the number of args (should be 1), refer to the test cases for when you should throw an `Excepetion`.
+  if (args.size() != 1) {
+    throw Exception(
+        fmt::format("in lower/upper function: the number of args is expected to be 1, but it is:" + args.size()));
+  }
   // 3. return a `StringExpression` std::shared_ptr.
-  throw Exception(fmt::format("func call {} not supported in planner yet", func_name));
+  std::shared_ptr<StringExpression> se = std::make_shared<StringExpression>(
+      args[0], func_name.compare("lower") == 0 ? StringExpressionType::Lower : StringExpressionType::Upper);
+  return se;
 }
 
 }  // namespace bustub

@@ -1,4 +1,5 @@
 #include <fmt/format.h>
+#include <stdio.h>
 #include <bitset>
 #include <functional>
 #include <numeric>
@@ -7,6 +8,7 @@
 #include <thread>  // NOLINT
 
 #include "common/exception.h"
+#include "common/logger.h"
 #include "gtest/gtest.h"
 #include "primer/trie.h"
 
@@ -14,6 +16,7 @@ namespace bustub {
 
 TEST(TrieTest, ConstructorTest) { auto trie = Trie(); }
 
+// TEST(TrieTest, DISABLED_BasicPutTest) {
 TEST(TrieTest, BasicPutTest) {
   auto trie = Trie();
   trie = trie.Put<uint32_t>("test-int", 233);
@@ -22,6 +25,7 @@ TEST(TrieTest, BasicPutTest) {
   trie = trie.Put<std::string>("", "empty-key");
 }
 
+// TEST(TrieTest, DISABLED_BasicPutGetTest) {
 TEST(TrieTest, BasicPutGetTest) {
   auto trie = Trie();
   // Put something
@@ -40,6 +44,7 @@ TEST(TrieTest, BasicPutGetTest) {
   ASSERT_EQ(*trie.Get<std::string>(""), "empty-key");
 }
 
+// TEST(TrieTest, DISABLED_PutGetOnePath) {
 TEST(TrieTest, PutGetOnePath) {
   auto trie = Trie();
   trie = trie.Put<uint32_t>("111", 111);
@@ -51,6 +56,7 @@ TEST(TrieTest, PutGetOnePath) {
   ASSERT_EQ(*trie.Get<uint32_t>("1111"), 1111);
 }
 
+// TEST(TrieTest, DISABLED_BasicRemoveTest1) {
 TEST(TrieTest, BasicRemoveTest1) {
   auto trie = Trie();
   // Put something
@@ -79,6 +85,7 @@ TEST(TrieTest, BasicRemoveTest2) {
   ASSERT_EQ(*trie.Get<uint32_t>("te"), 23);
   trie = trie.Put<uint32_t>("tes", 233);
   ASSERT_EQ(*trie.Get<uint32_t>("tes"), 233);
+
   // Delete something
   trie = trie.Remove("te");
   trie = trie.Remove("tes");
