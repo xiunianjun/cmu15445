@@ -86,6 +86,8 @@ TEST(TrieTest, BasicRemoveTest2) {
   trie = trie.Put<uint32_t>("tes", 233);
   ASSERT_EQ(*trie.Get<uint32_t>("tes"), 233);
 
+  auto it = &trie;
+  std::cout << it << std::endl;
   // Delete something
   trie = trie.Remove("te");
   trie = trie.Remove("tes");

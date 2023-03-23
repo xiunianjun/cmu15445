@@ -70,14 +70,17 @@ auto Trie::Put(std::string_view key, T value) const -> Trie {
     auto it = t->children_.find(key.at(i));
     if (it == t->children_.end()) {
       if (i != key.length() - 1) {
-        std::shared_ptr<TrieNode> tmp(new TrieNode());
+        std::shared_ptr<TrieNode> tmp = std::make_shared<TrieNode>();
+        // std::shared_ptr<TrieNode> tmp(new TrieNode());
         // std::shared_ptr<TrieNode> tmp(new TrieNode(key.at(i)));
         t->children_.insert(std::make_pair(key.at(i), tmp));
         t = tmp;
         // t.reset(tmp);
         // t = std::shared_ptr<TrieNode>(tmp);
       } else {
-        std::shared_ptr<TrieNodeWithValue<T>> tmp(new TrieNodeWithValue(std::make_shared<T>(std::move(value))));
+        std::shared_ptr<TrieNodeWithValue<T>> tmp =
+            std::make_shared<TrieNodeWithValue<T>>(std::make_shared<T>(std::move(value)));
+        // std::shared_ptr<TrieNodeWithValue<T>> tmp(new TrieNodeWithValue(std::make_shared<T>(std::move(value))));
         // std::shared_ptr<TrieNodeWithValue<T>> tmp(new TrieNodeWithValue(std::make_shared<T>(value)));
         //     std::make_shared<TrieNodeWithValue<T>>(std::make_shared<T>(std::move(value)));
         t->children_.insert(std::make_pair(key.at(i), tmp));

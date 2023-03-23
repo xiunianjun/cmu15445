@@ -19,7 +19,7 @@ TEST(TrieDebugger, TestCase) {
   std::mt19937_64 gen(2333);
   std::uniform_int_distribution<uint32_t> dis(0, 100);
 
-    auto trie = Trie();
+  auto trie = Trie();
   trie = trie.Put<uint32_t>("65", 25);
   trie = trie.Put<uint32_t>("61", 65);
   trie = trie.Put<uint32_t>("82", 84);
@@ -37,14 +37,14 @@ TEST(TrieDebugger, TestCase) {
   if (CASE_1_YOUR_ANSWER != Case1CorrectAnswer()) {
     ASSERT_TRUE(false);
   }
-auto it = trie.root_->children_.find('9');
+  // auto it = trie.root_->children_.find('9');
   // (2) How many children nodes are there on the node of prefix `9`?
   // Replace `CASE_2_YOUR_ANSWER` in `trie_answer.h` with the correct answer.
   if (CASE_2_YOUR_ANSWER != Case2CorrectAnswer()) {
     ASSERT_TRUE(false);
   }
-auto val = trie.Get<uint32_t>("93");
-std::cout << val << it->first << std::endl;
+  // auto val = trie.Get<uint32_t>("93");
+  // std::cout << val << it->first << std::endl;
   // (3) What's the value for `93`?
   // Replace `CASE_3_YOUR_ANSWER` in `trie_answer.h` with the correct answer.
   if (CASE_3_YOUR_ANSWER != Case3CorrectAnswer()) {

@@ -105,10 +105,11 @@ endif()
 
 # #####################################################################################################################
 # COMPILER SETUP
-# #####################################################################################################################
-if(NOT DEFINED BUSTUB_SANITIZER)
-        set(BUSTUB_SANITIZER address)
-endif()
+######################################################################################################################
+
+if (NOT DEFINED BUSTUB_SANITIZER)
+    set(BUSTUB_SANITIZER address)
+endif ()
 
 message("Build mode: ${CMAKE_BUILD_TYPE}")
 message("${BUSTUB_SANITIZER} sanitizer will be enabled in debug mode.")
