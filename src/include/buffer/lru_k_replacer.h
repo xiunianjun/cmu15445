@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <iostream>
 #include <limits>
 #include <list>
 #include <mutex>  // NOLINT
@@ -19,21 +20,25 @@
 #include <vector>
 
 #include "common/config.h"
+#include "common/exception.h"
 #include "common/macros.h"
+#include "fmt/format.h"
 
 namespace bustub {
 
 enum class AccessType { Unknown = 0, Get, Scan };
 
 class LRUKNode {
- private:
+  // private:
+ public:
   /** History of last seen K timestamps of this page. Least recent timestamp stored in front. */
   // Remove maybe_unused if you start using them. Feel free to change the member variables as you want.
 
-  [[maybe_unused]] std::list<size_t> history_;
-  [[maybe_unused]] size_t k_;
-  [[maybe_unused]] frame_id_t fid_;
-  [[maybe_unused]] bool is_evictable_{false};
+  size_t history_;
+  // [[maybe_unused]] std::list<size_t> history_;
+  size_t k_;
+  frame_id_t fid_;
+  bool is_evictable_{false};
 };
 
 /**
@@ -48,6 +53,16 @@ class LRUKNode {
  * classical LRU algorithm is used to choose victim.
  */
 class LRUKReplacer {
+ private:
+  std::list<LRUKNode> visit_record_{};  // 访问历史记录队列,队列bcak是最近访问
+  std::list<LRUKNode> cache_data_{};    // 缓存数据队列,队列back时间戳最大，最近访问
+  size_t record_size_{0};
+  size_t cache_size_{0};
+  size_t capacity_;
+  size_t k_;  // LRU-K的k
+  size_t current_timestamp_{0};
+  std::mutex latch_;
+
  public:
   /**
    *
@@ -56,7 +71,7 @@ class LRUKReplacer {
    * @brief a new LRUKReplacer.
    * @param num_frames the maximum number of frames the LRUReplacer will be required to store
    */
-  explicit LRUKReplacer(size_t num_frames, size_t k);
+  explicit LRUKReplacer(size_t num_frames, size_t k) : capacity_(num_frames), k_(k) {}
 
   DISALLOW_COPY_AND_MOVE(LRUKReplacer);
 
@@ -84,7 +99,6 @@ class LRUKReplacer {
    * @return true if a frame is evicted successfully, false if no frames can be evicted.
    */
   auto Evict(frame_id_t *frame_id) -> bool;
-
   /**
    * TODO(P1): Add implementation
    *
@@ -99,7 +113,6 @@ class LRUKReplacer {
    * leaderboard tests.
    */
   void RecordAccess(frame_id_t frame_id, AccessType access_type = AccessType::Unknown);
-
   /**
    * TODO(P1): Add implementation
    *
@@ -118,7 +131,6 @@ class LRUKReplacer {
    * @param set_evictable whether the given frame is evictable or not
    */
   void SetEvictable(frame_id_t frame_id, bool set_evictable);
-
   /**
    * TODO(P1): Add implementation
    *
@@ -137,7 +149,6 @@ class LRUKReplacer {
    * @param frame_id id of frame to be removed
    */
   void Remove(frame_id_t frame_id);
-
   /**
    * TODO(P1): Add implementation
    *
@@ -145,17 +156,20 @@ class LRUKReplacer {
    *
    * @return size_t
    */
-  auto Size() -> size_t;
+  auto Size() -> size_t {
+    std::lock_guard<std::mutex> lck(latch_);
+    return cache_size_ + record_size_;
+  }
 
- private:
-  // TODO(student): implement me! You can replace these member variables as you like.
-  // Remove maybe_unused if you start using them.
-  [[maybe_unused]] std::unordered_map<frame_id_t, LRUKNode> node_store_;
-  [[maybe_unused]] size_t current_timestamp_{0};
-  [[maybe_unused]] size_t curr_size_{0};
-  [[maybe_unused]] size_t replacer_size_;
-  [[maybe_unused]] size_t k_;
-  [[maybe_unused]] std::mutex latch_;
+  // private:
+  //  TODO(student): implement me! You can replace these member variables as you like.
+  //  Remove maybe_unused if you start using them.
+  // [[maybe_unused]] std::unordered_map<frame_id_t, LRUKNode> node_store_;
+  // [[maybe_unused]] size_t current_timestamp_{0};
+  // [[maybe_unused]] size_t curr_size_{0};
+  // [[maybe_unused]] size_t replacer_size_;
+  // [[maybe_unused]] size_t k_;
+  // [[maybe_unused]] std::mutex latch_;
 };
 
 }  // namespace bustub

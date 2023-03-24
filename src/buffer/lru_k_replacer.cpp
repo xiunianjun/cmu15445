@@ -14,17 +14,148 @@
 #include "common/exception.h"
 
 namespace bustub {
+auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
+  std::lock_guard<std::mutex> lck(latch_);
+  if (cache_size_ == 0 && record_size_ == 0) {
+    return false;
+  }
+  if (record_size_ != 0) {
+    // move from the record list
+    for (auto it = visit_record_.begin(); it != visit_record_.end(); it++) {
+      if (it->is_evictable_) {
+        *frame_id = it->fid_;
+        visit_record_.erase(it);
+        record_size_--;
+        return true;
+      }
+    }
+  }
+  for (auto it = cache_data_.begin(); it != cache_data_.end(); it++) {
+    if (it->is_evictable_) {
+      *frame_id = it->fid_;
+      cache_data_.erase(it);
+      cache_size_--;
+      return true;
+    }
+  }
+  return false;
+}
 
-LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_frames), k_(k) {}
+void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {
+  std::lock_guard<std::mutex> lck(latch_);
+  if (frame_id > (int)capacity_) {
+    throw Exception(fmt::format("RecordAccess:frame_id invalid."));
+  }
+  bool is_find = false;
+  for (auto it = cache_data_.begin(); it != cache_data_.end(); it++) {
+    if (it->fid_ == frame_id) {
+      is_find = true;
+      it->k_++;
+      it->history_ = current_timestamp_;
+      // it->history_.push_front(current_timestamp_);
+      cache_data_.push_back(LRUKNode(*it));
+      cache_data_.erase(it);
+      break;
+    }
+  }
+  if (!is_find) {
+    for (auto it = visit_record_.begin(); it != visit_record_.end(); it++) {
+      if (it->fid_ == frame_id) {
+        is_find = true;
+        it->k_++;
+        it->history_ = current_timestamp_;
+        if (it->k_ >= k_) {
+          // move to the cache
+          if (it->is_evictable_) {
+            cache_size_++;
+            record_size_--;
+          }
+          cache_data_.push_back(LRUKNode(*it));
+        } else {
+          // keep in the record
+          visit_record_.push_back(*it);
+        }
+        cache_data_.erase(it);
+        break;
+      }
+    }
+    if (!is_find) {
+      // add to the visit record
+      LRUKNode node;
+      node.history_ = current_timestamp_;
+      // node.history_.push_back(current_timestamp_);
+      node.k_ = 1;
+      node.fid_ = frame_id;
+      node.is_evictable_ = false;
+      visit_record_.push_back(node);
+      // record_size_++;
+    }
+  }
+}
 
-auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool { return false; }
+void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
+  std::lock_guard<std::mutex> lck(latch_);
+  // if(frame_id > capacity_){
+  if (frame_id > (int)capacity_) {
+    throw Exception(fmt::format("SetEvictable:frame_id invalid."));
+  }
 
-void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {}
+  for (auto it = cache_data_.begin(); it != cache_data_.end(); it++) {
+    if (it->fid_ == frame_id) {
+      if (!it->is_evictable_ && set_evictable) {
+        cache_size_++;
+      } else if (it->is_evictable_ && !set_evictable) {
+        cache_size_--;
+      }
+      it->is_evictable_ = set_evictable;
+      return;
+    }
+  }
+  for (auto it = visit_record_.begin(); it != visit_record_.end(); it++) {
+    if (it->fid_ == frame_id) {
+      if (!it->is_evictable_ && set_evictable) {
+        record_size_++;
+      } else if (it->is_evictable_ && !set_evictable) {
+        record_size_--;
+      }
+      it->is_evictable_ = set_evictable;
+      return;
+    }
+  }
+  // throw exception
+  throw Exception(fmt::format("SetEvictable:can't find target frame."));
+}
 
-void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {}
+void LRUKReplacer::Remove(frame_id_t frame_id) {
+  std::lock_guard<std::mutex> lck(latch_);
+  // if(frame_id > capacity_){
+  if (frame_id > (int)capacity_) {
+    throw Exception(fmt::format("Remove:frame_id invalid."));
+  }
+  for (auto it = cache_data_.begin(); it != cache_data_.end(); it++) {
+    if (it->fid_ == frame_id) {
+      if (it->is_evictable_) {
+        cache_size_--;
+      } else {
+        throw Exception(fmt::format("Remove:target frame is not evictable."));
+      }
+      cache_data_.erase(it);
+      return;
+    }
+  }
+  for (auto it = visit_record_.begin(); it != visit_record_.end(); it++) {
+    if (it->fid_ == frame_id) {
+      if (it->is_evictable_) {
+        record_size_--;
+      } else {
+        throw Exception(fmt::format("Remove:target frame is not evictable."));
+      }
+      visit_record_.erase(it);
+      return;
+    }
+  }
+}
 
-void LRUKReplacer::Remove(frame_id_t frame_id) {}
-
-auto LRUKReplacer::Size() -> size_t { return 0; }
+// auto LRUKReplacer::Size() -> size_t { return 0; }
 
 }  // namespace bustub
