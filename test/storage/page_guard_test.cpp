@@ -44,7 +44,6 @@ TEST(PageGuardTest, SampleTest) {
   }
   EXPECT_EQ(1, page0->GetPinCount());
 
-
   // test ReadPageGuard(ReadPageGuard &&that)
   {
     // auto reader_guard = ReadPageGuard(bpm.get(),page0);
@@ -54,7 +53,7 @@ TEST(PageGuardTest, SampleTest) {
   }
   EXPECT_EQ(1, page0->GetPinCount());
 
-    // test ReadPageGuard::operator=(ReadPageGuard &&that)
+  // test ReadPageGuard::operator=(ReadPageGuard &&that)
   {
     auto reader_guard_1 = bpm->FetchPageRead(page_id_temp);
     auto reader_guard_2 = bpm->FetchPageRead(page_id_temp);

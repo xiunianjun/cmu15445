@@ -22,7 +22,6 @@ namespace bustub {
 BufferPoolManager::BufferPoolManager(size_t pool_size, DiskManager *disk_manager, size_t replacer_k,
                                      LogManager *log_manager)
     : pool_size_(pool_size), disk_manager_(disk_manager), log_manager_(log_manager) {
-
   // we allocate a consecutive memory space for the buffer pool
   pages_ = new Page[pool_size_];
   replacer_ = std::make_unique<LRUKReplacer>(pool_size, replacer_k);
@@ -43,10 +42,10 @@ BufferPoolManager::~BufferPoolManager() { delete[] pages_; }
 auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   std::lock_guard<std::mutex> lck(latch_);
 
-  for(size_t i = 0; i < pool_size_; ++i){
-      if(pages_[i].GetPinCount() == 0 && pages_[i].page_id_ != INVALID_PAGE_ID){
-	  replacer_->SetEvictable(i,true);
-      }
+  for (size_t i = 0; i < pool_size_; ++i) {
+    if (pages_[i].GetPinCount() == 0 && pages_[i].page_id_ != INVALID_PAGE_ID) {
+      replacer_->SetEvictable(i, true);
+    }
   }
 
   if (free_list_.empty()) {
@@ -90,10 +89,10 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
 // 跟newpage一样都要记得调用replacer的方法
 auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType access_type) -> Page * {
   std::lock_guard<std::mutex> lck(latch_);
-  for(size_t i = 0; i < pool_size_; ++i){
-      if(pages_[i].GetPinCount() == 0 && pages_[i].page_id_ != INVALID_PAGE_ID){
-	  replacer_->SetEvictable(i,true);
-      }
+  for (size_t i = 0; i < pool_size_; ++i) {
+    if (pages_[i].GetPinCount() == 0 && pages_[i].page_id_ != INVALID_PAGE_ID) {
+      replacer_->SetEvictable(i, true);
+    }
   }
   auto it = page_table_.find(page_id);
   if (it != page_table_.end()) {

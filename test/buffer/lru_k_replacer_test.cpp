@@ -17,16 +17,14 @@
 namespace bustub {
 
 TEST(LRUKReplacerTest, SampleTest) {
-
   {
-      LRUKReplacer lru_replacer(7, 2);
-      lru_replacer.RecordAccess(3);
-      lru_replacer.RecordAccess(4);
-      lru_replacer.RecordAccess(3);
-  int value;
-  lru_replacer.Evict(&value);
-  ASSERT_EQ(4, value);
-
+    LRUKReplacer lru_replacer(7, 2);
+    lru_replacer.RecordAccess(3);
+    lru_replacer.RecordAccess(4);
+    lru_replacer.RecordAccess(3);
+    int value;
+    lru_replacer.Evict(&value);
+    ASSERT_EQ(4, value);
   }
 
   // TEST(LRUKReplacerTest, DISABLED_SampleTest) {

@@ -16,7 +16,7 @@ void BasicPageGuard::Drop() {
   if (!valid_) {
     return;
   }
-  if (!is_unpin_&&bpm_!=nullptr&&page_!=nullptr) {
+  if (!is_unpin_ && bpm_ != nullptr && page_ != nullptr) {
     bpm_->UnpinPage(page_->GetPageId(), is_dirty_);
     is_unpin_ = true;
     // bpm_->DeletePage(page_->GetPageId());
@@ -65,12 +65,12 @@ auto ReadPageGuard::operator=(ReadPageGuard &&that) noexcept -> ReadPageGuard & 
 
   guard_.page_ = that.guard_.page_;
   guard_.page_->RLatch();
-  is_locked_ = true;  
+  is_locked_ = true;
   return *this;
 }
 
 void ReadPageGuard::Drop() {
-  if (is_locked_&&guard_.page_!=nullptr) {
+  if (is_locked_ && guard_.page_ != nullptr) {
     guard_.page_->RUnlatch();
     is_locked_ = false;
   }
@@ -111,12 +111,12 @@ auto WritePageGuard::operator=(WritePageGuard &&that) noexcept -> WritePageGuard
 
   guard_.page_ = that.guard_.page_;
   guard_.page_->WLatch();
-  is_locked_ = true;  
+  is_locked_ = true;
   return *this;
 }
 
 void WritePageGuard::Drop() {
-  if (is_locked_&&guard_.page_!=nullptr) {
+  if (is_locked_ && guard_.page_ != nullptr) {
     guard_.page_->WUnlatch();
     is_locked_ = false;
   }
