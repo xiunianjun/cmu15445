@@ -160,16 +160,6 @@ class LRUKReplacer {
     std::lock_guard<std::mutex> lck(latch_);
     return cache_size_ + record_size_;
   }
-
-  // private:
-  //  TODO(student): implement me! You can replace these member variables as you like.
-  //  Remove maybe_unused if you start using them.
-  // [[maybe_unused]] std::unordered_map<frame_id_t, LRUKNode> node_store_;
-  // [[maybe_unused]] size_t current_timestamp_{0};
-  // [[maybe_unused]] size_t curr_size_{0};
-  // [[maybe_unused]] size_t replacer_size_;
-  // [[maybe_unused]] size_t k_;
-  // [[maybe_unused]] std::mutex latch_;
 };
 
 }  // namespace bustub

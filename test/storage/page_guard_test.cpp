@@ -23,7 +23,7 @@
 namespace bustub {
 
 // NOLINTNEXTLINE
-TEST(PageGuardTest, DISABLED_SampleTest) {
+TEST(PageGuardTest, SampleTest) {
   const std::string db_name = "test.db";
   const size_t buffer_pool_size = 5;
   const size_t k = 2;
@@ -34,7 +34,77 @@ TEST(PageGuardTest, DISABLED_SampleTest) {
   page_id_t page_id_temp;
   auto *page0 = bpm->NewPage(&page_id_temp);
 
+  // 保持这个变量，来保证page0不被释放
   auto guarded_page = BasicPageGuard(bpm.get(), page0);
+
+  // test ~ReadPageGuard()
+  {
+    auto reader_guard = bpm->FetchPageRead(page_id_temp);
+    EXPECT_EQ(2, page0->GetPinCount());
+  }
+  EXPECT_EQ(1, page0->GetPinCount());
+
+
+  // test ReadPageGuard(ReadPageGuard &&that)
+  {
+    // auto reader_guard = ReadPageGuard(bpm.get(),page0);
+    auto reader_guard = bpm->FetchPageRead(page_id_temp);
+    auto reader_guard_2 = ReadPageGuard(std::move(reader_guard));
+    EXPECT_EQ(2, page0->GetPinCount());
+  }
+  EXPECT_EQ(1, page0->GetPinCount());
+
+    // test ReadPageGuard::operator=(ReadPageGuard &&that)
+  {
+    auto reader_guard_1 = bpm->FetchPageRead(page_id_temp);
+    auto reader_guard_2 = bpm->FetchPageRead(page_id_temp);
+    EXPECT_EQ(3, page0->GetPinCount());
+    reader_guard_1 = std::move(reader_guard_2);
+    EXPECT_EQ(2, page0->GetPinCount());
+  }
+  EXPECT_EQ(1, page0->GetPinCount());
+
+  // test1:  测试ReadPageGuard
+  {
+    auto rd_gp = bpm->FetchPageRead(page_id_temp);
+    // auto rd_gp = bpm->FetchPageRead(bpm.get(), page0);
+    EXPECT_EQ(page0->GetData(), rd_gp.GetData());
+    EXPECT_EQ(page0->GetPageId(), rd_gp.PageId());
+    EXPECT_EQ(2, page0->GetPinCount());
+
+    rd_gp.Drop();
+
+    EXPECT_EQ(1, page0->GetPinCount());
+  }
+
+  // test2:  测试ReadPageGuard自动释放
+  {
+    auto rd_gp = bpm->FetchPageRead(page_id_temp);
+    EXPECT_EQ(page0->GetData(), rd_gp.GetData());
+    EXPECT_EQ(page0->GetPageId(), rd_gp.PageId());
+    EXPECT_EQ(2, page0->GetPinCount());
+  }
+  EXPECT_EQ(1, page0->GetPinCount());
+
+  // test3:  测试WritePageGuard
+  {
+    auto wt_gp = bpm->FetchPageWrite(page_id_temp);
+    EXPECT_EQ(page0->GetData(), wt_gp.GetData());
+    EXPECT_EQ(page0->GetPageId(), wt_gp.PageId());
+    EXPECT_EQ(2, page0->GetPinCount());
+
+    wt_gp.Drop();
+
+    EXPECT_EQ(1, page0->GetPinCount());
+  }
+  // test4:  测试WritePageGuard的自动释放
+  {
+    auto wt_gp = bpm->FetchPageWrite(page_id_temp);
+    EXPECT_EQ(page0->GetData(), wt_gp.GetData());
+    EXPECT_EQ(page0->GetPageId(), wt_gp.PageId());
+    EXPECT_EQ(2, page0->GetPinCount());
+  }
+  EXPECT_EQ(1, page0->GetPinCount());
 
   EXPECT_EQ(page0->GetData(), guarded_page.GetData());
   EXPECT_EQ(page0->GetPageId(), guarded_page.PageId());

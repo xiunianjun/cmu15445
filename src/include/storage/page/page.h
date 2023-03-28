@@ -44,16 +44,12 @@ class Page {
 
   /** @return the page id of this page */
   inline auto GetPageId() -> page_id_t { return page_id_; }
-  inline auto SetPageId(page_id_t page_id) { page_id_ = page_id; }
 
   /** @return the pin count of this page */
   inline auto GetPinCount() -> int { return pin_count_; }
-  inline auto Pin() { pin_count_++; }
-  inline auto UnPin() { pin_count_--; }
 
   /** @return true if the page in memory has been modified from the page on disk, false otherwise */
   inline auto IsDirty() -> bool { return is_dirty_; }
-  inline auto SetDirty(bool is_dirty) { is_dirty_ = is_dirty; }
 
   /** Acquire the page write latch. */
   inline void WLatch() { rwlatch_.WLock(); }
@@ -72,8 +68,6 @@ class Page {
 
   /** Sets the page LSN. */
   inline void SetLSN(lsn_t lsn) { memcpy(GetData() + OFFSET_LSN, &lsn, sizeof(lsn_t)); }
-  /** Zeroes out the data that is held within the page. */
-  inline void ResetMemory() { memset(data_, OFFSET_PAGE_START, BUSTUB_PAGE_SIZE); }
 
  protected:
   static_assert(sizeof(page_id_t) == 4);
@@ -84,6 +78,9 @@ class Page {
   static constexpr size_t OFFSET_LSN = 4;
 
  private:
+  /** Zeroes out the data that is held within the page. */
+  inline void ResetMemory() { memset(data_, OFFSET_PAGE_START, BUSTUB_PAGE_SIZE); }
+
   /** The actual data that is stored within a page. */
   // Usually this should be stored as `char data_[BUSTUB_PAGE_SIZE]{};`. But to enable ASAN to detect page overflow,
   // we store it as a ptr.

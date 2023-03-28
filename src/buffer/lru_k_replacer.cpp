@@ -43,7 +43,7 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
 
 void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {
   std::lock_guard<std::mutex> lck(latch_);
-  if (frame_id > (int)capacity_) {
+  if (frame_id > static_cast<int>(capacity_)) {
     throw Exception(fmt::format("RecordAccess:frame_id invalid."));
   }
   bool is_find = false;
@@ -53,7 +53,8 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
       it->k_++;
       it->history_ = current_timestamp_;
       // it->history_.push_front(current_timestamp_);
-      cache_data_.push_back(LRUKNode(*it));
+      cache_data_.emplace_back(LRUKNode(*it));
+      // cache_data_.push_back(LRUKNode(*it));
       cache_data_.erase(it);
       break;
     }
@@ -70,10 +71,12 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
             cache_size_++;
             record_size_--;
           }
-          cache_data_.push_back(LRUKNode(*it));
+          // cache_data_.push_back(LRUKNode(*it));
+          cache_data_.emplace_back(LRUKNode(*it));
         } else {
           // keep in the record
-          visit_record_.push_back(*it);
+          visit_record_.emplace_back(LRUKNode(*it));
+          // visit_record_.push_back(*it);
         }
         cache_data_.erase(it);
         break;
@@ -86,9 +89,9 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
       // node.history_.push_back(current_timestamp_);
       node.k_ = 1;
       node.fid_ = frame_id;
-      node.is_evictable_ = false;
+      node.is_evictable_ = true;
       visit_record_.push_back(node);
-      // record_size_++;
+      record_size_++;
     }
   }
 }
@@ -96,32 +99,34 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
 void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
   std::lock_guard<std::mutex> lck(latch_);
   // if(frame_id > capacity_){
-  if (frame_id > (int)capacity_) {
+  if (frame_id > static_cast<int>(capacity_)) {
     throw Exception(fmt::format("SetEvictable:frame_id invalid."));
   }
-
-  for (auto it = cache_data_.begin(); it != cache_data_.end(); it++) {
-    if (it->fid_ == frame_id) {
-      if (!it->is_evictable_ && set_evictable) {
+  // for (auto it = cache_data_.begin(); it != cache_data_.end(); it++){
+  for (auto &it : cache_data_) {
+    if (it.fid_ == frame_id) {
+      if (!it.is_evictable_ && set_evictable) {
         cache_size_++;
-      } else if (it->is_evictable_ && !set_evictable) {
+      } else if (it.is_evictable_ && !set_evictable) {
         cache_size_--;
       }
-      it->is_evictable_ = set_evictable;
+      it.is_evictable_ = set_evictable;
       return;
     }
   }
-  for (auto it = visit_record_.begin(); it != visit_record_.end(); it++) {
-    if (it->fid_ == frame_id) {
-      if (!it->is_evictable_ && set_evictable) {
+  // for (auto it = visit_record_.begin(); it != visit_record_.end(); it++) {
+  for (auto &it : visit_record_) {
+    if (it.fid_ == frame_id) {
+      if (!it.is_evictable_ && set_evictable) {
         record_size_++;
-      } else if (it->is_evictable_ && !set_evictable) {
+      } else if (it.is_evictable_ && !set_evictable) {
         record_size_--;
       }
-      it->is_evictable_ = set_evictable;
+      it.is_evictable_ = set_evictable;
       return;
     }
   }
+
   // throw exception
   throw Exception(fmt::format("SetEvictable:can't find target frame."));
 }
@@ -129,7 +134,7 @@ void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
 void LRUKReplacer::Remove(frame_id_t frame_id) {
   std::lock_guard<std::mutex> lck(latch_);
   // if(frame_id > capacity_){
-  if (frame_id > (int)capacity_) {
+  if (frame_id > static_cast<int>(capacity_)) {
     throw Exception(fmt::format("Remove:frame_id invalid."));
   }
   for (auto it = cache_data_.begin(); it != cache_data_.end(); it++) {
