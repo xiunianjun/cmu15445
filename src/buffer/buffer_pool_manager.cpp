@@ -42,6 +42,13 @@ BufferPoolManager::~BufferPoolManager() { delete[] pages_; }
 // 记得call setevictable来pin，和recoradaccess
 auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   std::lock_guard<std::mutex> lck(latch_);
+
+  for(size_t i = 0; i < pool_size_; ++i){
+      if(pages_[i].GetPinCount() == 0 && pages_[i].page_id_ != INVALID_PAGE_ID){
+	  replacer_->SetEvictable(i,true);
+      }
+  }
+
   if (free_list_.empty()) {
     frame_id_t fid;
     if (!replacer_->Evict(&fid)) {
@@ -69,7 +76,7 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   res->is_dirty_ = false;
 
   page_table_.insert(std::make_pair(*page_id, fid));
-  res->pin_count_++;
+  res->pin_count_ = 1;
   replacer_->RecordAccess(fid);
   replacer_->SetEvictable(fid, false);
 
@@ -83,6 +90,11 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
 // 跟newpage一样都要记得调用replacer的方法
 auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType access_type) -> Page * {
   std::lock_guard<std::mutex> lck(latch_);
+  for(size_t i = 0; i < pool_size_; ++i){
+      if(pages_[i].GetPinCount() == 0 && pages_[i].page_id_ != INVALID_PAGE_ID){
+	  replacer_->SetEvictable(i,true);
+      }
+  }
   auto it = page_table_.find(page_id);
   if (it != page_table_.end()) {
     frame_id_t fid = it->second;
@@ -106,6 +118,7 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
       disk_manager_->WritePage(pages_[fid].GetPageId(), pages_[fid].GetData());
       pages_[fid].is_dirty_ = false;
     }
+    disk_manager_->ReadPage(page_id, pages_[fid].GetData());
     page_table_.erase(page_table_.find(pages_[fid].GetPageId()));
     pages_[fid].page_id_ = INVALID_PAGE_ID;
     // replacer_->SetEvictable(fid, true);
@@ -120,7 +133,7 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
   page_table_.insert(std::make_pair(page_id, fid));
   disk_manager_->ReadPage(page_id, pages_[fid].GetData());
   res->is_dirty_ = false;
-  res->pin_count_++;
+  res->pin_count_ = 1;
   replacer_->RecordAccess(fid);
   replacer_->SetEvictable(fid, false);
   return res;
@@ -188,6 +201,7 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
   pages_[fid].page_id_ = INVALID_PAGE_ID;
   pages_[fid].ResetMemory();
   pages_[fid].is_dirty_ = false;
+  pages_[fid].pin_count_ = 0;
   replacer_->SetEvictable(fid, true);
   free_list_.push_back(fid);
   DeallocatePage(page_id);
