@@ -15,6 +15,7 @@
 #include <iostream>
 #include <limits>
 #include <list>
+#include <map>
 #include <mutex>  // NOLINT
 #include <unordered_map>
 #include <vector>
@@ -34,8 +35,8 @@ class LRUKNode {
   /** History of last seen K timestamps of this page. Least recent timestamp stored in front. */
   // Remove maybe_unused if you start using them. Feel free to change the member variables as you want.
 
-  size_t history_;
-  // [[maybe_unused]] std::list<size_t> history_;
+  // size_t history_;
+  std::list<size_t> history_;
   size_t k_;
   frame_id_t fid_;
   bool is_evictable_{false};
@@ -54,8 +55,9 @@ class LRUKNode {
  */
 class LRUKReplacer {
  private:
-  std::list<LRUKNode> visit_record_{};  // 访问历史记录队列,队列bcak是最近访问
-  std::list<LRUKNode> cache_data_{};    // 缓存数据队列,队列back时间戳最大，最近访问
+  std::list<LRUKNode> visit_record_{};           // 访问历史记录队列,队列bcak是最近访问
+  std::map<frame_id_t, LRUKNode> cache_data_{};  // 缓存数据队列,队列back时间戳最大，最近访问
+  // std::list<LRUKNode> cache_data_{};    // 缓存数据队列,队列back时间戳最大，最近访问
   size_t record_size_{0};
   size_t cache_size_{0};
   size_t capacity_;
