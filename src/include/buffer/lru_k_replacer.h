@@ -55,7 +55,8 @@ class LRUKNode {
  */
 class LRUKReplacer {
  private:
-  std::list<LRUKNode> visit_record_{};           // 访问历史记录队列,队列bcak是最近访问
+  std::map<frame_id_t, LRUKNode> visit_record_{};  // 访问历史记录队列,队列bcak是最近访问
+  // std::list<LRUKNode> visit_record_{};           // 访问历史记录队列,队列bcak是最近访问
   std::map<frame_id_t, LRUKNode> cache_data_{};  // 缓存数据队列,队列back时间戳最大，最近访问
   // std::list<LRUKNode> cache_data_{};    // 缓存数据队列,队列back时间戳最大，最近访问
   size_t record_size_{0};
