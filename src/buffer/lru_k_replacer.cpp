@@ -103,7 +103,7 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
       node.k_ = 1;
       node.fid_ = frame_id;
       node.is_evictable_ = true;
-      visit_record_.emplace(node.fid_,node);
+      visit_record_.emplace(node.fid_, node);
       record_size_++;
     }
   }

@@ -30,6 +30,8 @@ class Page {
   friend class BufferPoolManager;
 
  public:
+  int read_lock_count_ = 0;
+  int read_unlock_count_ = 0;
   /** Constructor. Zeros out the page data. */
   Page() {
     data_ = new char[BUSTUB_PAGE_SIZE];
@@ -58,10 +60,16 @@ class Page {
   inline void WUnlatch() { rwlatch_.WUnlock(); }
 
   /** Acquire the page read latch. */
-  inline void RLatch() { rwlatch_.RLock(); }
+  inline void RLatch() {
+    read_lock_count_++;
+    rwlatch_.RLock();
+  }
 
   /** Release the page read latch. */
-  inline void RUnlatch() { rwlatch_.RUnlock(); }
+  inline void RUnlatch() {
+    read_unlock_count_++;
+    rwlatch_.RUnlock();
+  }
 
   /** @return the page LSN. */
   inline auto GetLSN() -> lsn_t { return *reinterpret_cast<lsn_t *>(GetData() + OFFSET_LSN); }

@@ -15,6 +15,7 @@
 #include <string>
 
 #include "buffer/buffer_pool_manager.h"
+#include "common/rwlatch.h"
 #include "storage/disk/disk_manager_memory.h"
 #include "storage/page/page_guard.h"
 
@@ -34,8 +35,12 @@ TEST(PageGuardTest, SampleTest) {
   page_id_t page_id_temp;
   auto *page0 = bpm->NewPage(&page_id_temp);
 
+  int cnt = 0;
+
   // 保持这个变量，来保证page0不被释放
   auto guarded_page = BasicPageGuard(bpm.get(), page0);
+
+  LOG_DEBUG("%d # : lock_cnt is %d, unlock_cnt is %d.\n", cnt++, page0->read_lock_count_, page0->read_unlock_count_);
 
   // test ~ReadPageGuard()
   {
@@ -44,6 +49,7 @@ TEST(PageGuardTest, SampleTest) {
   }
   EXPECT_EQ(1, page0->GetPinCount());
 
+  LOG_DEBUG("%d # : lock_cnt is %d, unlock_cnt is %d.\n", cnt++, page0->read_lock_count_, page0->read_unlock_count_);
   // test ReadPageGuard(ReadPageGuard &&that)
   {
     // auto reader_guard = ReadPageGuard(bpm.get(),page0);
@@ -53,6 +59,7 @@ TEST(PageGuardTest, SampleTest) {
   }
   EXPECT_EQ(1, page0->GetPinCount());
 
+  LOG_DEBUG("%d # : lock_cnt is %d, unlock_cnt is %d.\n", cnt++, page0->read_lock_count_, page0->read_unlock_count_);
   // test ReadPageGuard::operator=(ReadPageGuard &&that)
   {
     auto reader_guard_1 = bpm->FetchPageRead(page_id_temp);
@@ -63,6 +70,7 @@ TEST(PageGuardTest, SampleTest) {
   }
   EXPECT_EQ(1, page0->GetPinCount());
 
+  LOG_DEBUG("%d # : lock_cnt is %d, unlock_cnt is %d.\n", cnt++, page0->read_lock_count_, page0->read_unlock_count_);
   // test1:  测试ReadPageGuard
   {
     auto rd_gp = bpm->FetchPageRead(page_id_temp);
@@ -76,6 +84,7 @@ TEST(PageGuardTest, SampleTest) {
     EXPECT_EQ(1, page0->GetPinCount());
   }
 
+  LOG_DEBUG("%d # : lock_cnt is %d, unlock_cnt is %d.\n", cnt++, page0->read_lock_count_, page0->read_unlock_count_);
   // test2:  测试ReadPageGuard自动释放
   {
     auto rd_gp = bpm->FetchPageRead(page_id_temp);
@@ -85,6 +94,7 @@ TEST(PageGuardTest, SampleTest) {
   }
   EXPECT_EQ(1, page0->GetPinCount());
 
+  LOG_DEBUG("%d # : lock_cnt is %d, unlock_cnt is %d.\n", cnt++, page0->read_lock_count_, page0->read_unlock_count_);
   // test3:  测试WritePageGuard
   {
     auto wt_gp = bpm->FetchPageWrite(page_id_temp);

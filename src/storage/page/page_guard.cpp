@@ -3,6 +3,16 @@
 
 namespace bustub {
 
+/** TODO(P1): Add implementation
+ *
+ * @brief Move constructor for BasicPageGuard
+ *
+ * When you call BasicPageGuard(std::move(other_guard)), you
+ * expect that the new guard will behave exactly like the other
+ * one. In addition, the old page guard should not be usable. For
+ * example, it should not be possible to call .Drop() on both page
+ * guards and have the pin count decrease by 2.
+ */
 BasicPageGuard::BasicPageGuard(BasicPageGuard &&that) noexcept {
   valid_ = that.valid_;
   page_ = that.page_;
@@ -12,6 +22,15 @@ BasicPageGuard::BasicPageGuard(BasicPageGuard &&that) noexcept {
   that.valid_ = false;
 }
 
+/** TODO(P1): Add implementation
+ *
+ * @brief Drop a page guard
+ *
+ * Dropping a page guard should clear all contents
+ * (so that the page guard is no longer useful), and
+ * it should tell the BPM that we are done using this page,
+ * per the specification in the writeup.
+ */
 void BasicPageGuard::Drop() {
   if (!valid_) {
     return;
@@ -19,117 +38,107 @@ void BasicPageGuard::Drop() {
   if (!is_unpin_ && bpm_ != nullptr && page_ != nullptr) {
     bpm_->UnpinPage(page_->GetPageId(), is_dirty_);
     is_unpin_ = true;
-    // bpm_->DeletePage(page_->GetPageId());
   }
   valid_ = false;
 }
 
+/** TODO(P1): Add implementation
+ *
+ * @brief Move assignment for BasicPageGuard
+ *
+ * Similar to a move constructor, except that the move
+ * assignment assumes that BasicPageGuard already has a page
+ * being guarded.
+ * Think carefully about what should happen when
+ * a guard replaces its held page with a different one, given
+ * the purpose of a page guard.
+ */
 auto BasicPageGuard::operator=(BasicPageGuard &&that) noexcept -> BasicPageGuard & {
   Drop();
+  is_unpin_ = that.is_unpin_;
   that.is_unpin_ = true;
   valid_ = that.valid_;
   page_ = that.page_;
   is_dirty_ = that.is_dirty_;
   bpm_ = that.bpm_;
+  that.valid_ = false;
 
   return *this;
 }
 
-BasicPageGuard::~BasicPageGuard() {
-  Drop();
-  // delete page_;
-  // delete bpm_;
-};  // NOLINT
+BasicPageGuard::~BasicPageGuard() { Drop(); };  // NOLINT
 
+/** TODO(P1): Add implementation
+ *
+ * @brief Move constructor for ReadPageGuard
+ *
+ * Very similar to BasicPageGuard. You want to create
+ * a ReadPageGuard using another ReadPageGuard. Think
+ * about if there's any way you can make this easier for yourself...
+ */
 ReadPageGuard::ReadPageGuard(ReadPageGuard &&that) noexcept {
-  if (that.is_locked_) {
-    that.guard_.page_->RUnlatch();
-    that.is_locked_ = false;
-  }
+  should_release_ = that.should_release_;
+  that.should_release_ = false;
   guard_ = BasicPageGuard(std::move(that.guard_));
-  guard_.page_->RLatch();
-  is_locked_ = true;
 }
 
+/** TODO(P1): Add implementation
+ *
+ * @brief Move assignment for ReadPageGuard
+ *
+ * Very similar to BasicPageGuard. Given another ReadPageGuard,
+ * replace the contents of this one with that one.
+ */
 auto ReadPageGuard::operator=(ReadPageGuard &&that) noexcept -> ReadPageGuard & {
-  guard_.Drop();
-  guard_.is_unpin_ = that.guard_.is_unpin_;
-  that.guard_.is_unpin_ = true;
-  guard_.valid_ = that.guard_.valid_;
-  guard_.is_dirty_ = that.guard_.is_dirty_;
-  guard_.bpm_ = that.guard_.bpm_;
-  if (that.is_locked_) {
-    that.guard_.page_->RUnlatch();
-    that.is_locked_ = false;
-  }
-
-  guard_.page_ = that.guard_.page_;
-  guard_.page_->RLatch();
-  is_locked_ = true;
+  Drop();
+  guard_ = std::move(that.guard_);
+  should_release_ = that.should_release_;
+  that.should_release_ = false;
   return *this;
 }
 
+/** TODO(P1): Add implementation
+ *
+ * @brief Drop a ReadPageGuard
+ *
+ * ReadPageGuard's Drop should behave similarly to BasicPageGuard,
+ * except that ReadPageGuard has an additional resource - the latch!
+ * However, you should think VERY carefully about in which order you
+ * want to release these resources.
+ */
 void ReadPageGuard::Drop() {
-  if (is_locked_ && guard_.page_ != nullptr) {
-    guard_.page_->RUnlatch();
-    is_locked_ = false;
-  }
-
-  // if (!guard_.valid_) {
-  //   return;
-  // }
-
   guard_.Drop();
+
+  if (should_release_ && guard_.page_ != nullptr) {
+    guard_.page_->RUnlatch();
+    should_release_ = false;
+  }
 }
 
-ReadPageGuard::~ReadPageGuard() {
-  Drop();
-  // guard_.~BasicPageGuard();
-}  // NOLINT
+ReadPageGuard::~ReadPageGuard() { Drop(); }  // NOLINT
 
 WritePageGuard::WritePageGuard(WritePageGuard &&that) noexcept {
-  if (that.is_locked_) {
-    that.guard_.page_->WUnlatch();
-    that.is_locked_ = false;
-  }
+  should_release_ = that.should_release_;
+  that.should_release_ = false;
   guard_ = BasicPageGuard(std::move(that.guard_));
-  guard_.page_->WLatch();
-  is_locked_ = true;
 }
 
 auto WritePageGuard::operator=(WritePageGuard &&that) noexcept -> WritePageGuard & {
-  guard_.Drop();
-  guard_.is_unpin_ = that.guard_.is_unpin_;
-  that.guard_.is_unpin_ = true;
-  guard_.valid_ = that.guard_.valid_;
-  guard_.is_dirty_ = that.guard_.is_dirty_;
-  guard_.bpm_ = that.guard_.bpm_;
-  if (that.is_locked_) {
-    that.guard_.page_->WUnlatch();
-    that.is_locked_ = false;
-  }
-
-  guard_.page_ = that.guard_.page_;
-  guard_.page_->WLatch();
-  is_locked_ = true;
+  Drop();
+  guard_ = std::move(that.guard_);
+  should_release_ = that.should_release_;
+  that.should_release_ = false;
   return *this;
 }
 
 void WritePageGuard::Drop() {
-  if (is_locked_ && guard_.page_ != nullptr) {
-    guard_.page_->WUnlatch();
-    is_locked_ = false;
-  }
-
-  // if (!guard_.valid_) {
-  //   return;
-  // }
-
   guard_.Drop();
+
+  if (should_release_ && guard_.page_ != nullptr) {
+    guard_.page_->WUnlatch();
+    should_release_ = false;
+  }
 }
 
-WritePageGuard::~WritePageGuard() {
-  Drop();
-  // guard_.~BasicPageGuard();
-}
+WritePageGuard::~WritePageGuard() { Drop(); }
 }  // namespace bustub
