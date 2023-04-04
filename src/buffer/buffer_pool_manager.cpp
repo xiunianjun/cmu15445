@@ -21,7 +21,7 @@ namespace bustub {
 
 BufferPoolManager::BufferPoolManager(size_t pool_size, DiskManager *disk_manager, size_t replacer_k,
                                      LogManager *log_manager)
-    : pool_size_(pool_size), disk_manager_(disk_manager), log_manager_(log_manager), pages_latch_(pool_size){
+    : pool_size_(pool_size), disk_manager_(disk_manager), log_manager_(log_manager), pages_latch_(pool_size) {
   // we allocate a consecutive memory space for the buffer pool
   pages_ = new Page[pool_size_];
   replacer_ = std::make_unique<LRUKReplacer>(pool_size, replacer_k);
@@ -58,51 +58,59 @@ BufferPoolManager::~BufferPoolManager() { delete[] pages_; }
  */
 
 auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
-  latch_.lock_shared();
-
-  for (size_t i = 0; i < pool_size_; ++i) {
-    if (pages_[i].GetPinCount() == 0 && pages_[i].page_id_ != INVALID_PAGE_ID) {
-      replacer_->SetEvictable(i, true);
-    }
-  }
-
-  latch_.unlock_shared();
-
   latch_.lock();
-  while (free_list_.empty()) {
+  if (free_list_.empty()) {
     frame_id_t fid;
     if (!replacer_->Evict(&fid)) {
       // 是否要设置为该值还存疑
       *page_id = INVALID_PAGE_ID;
-      // *page_id = nullptr;
       latch_.unlock();
       return nullptr;
     }
+    page_table_.erase(page_table_.find(pages_[fid].GetPageId()));
+    *page_id = AllocatePage();
+    page_table_.insert(std::make_pair(*page_id, fid));
+
+    replacer_->RecordAccess(fid);
+    replacer_->SetEvictable(fid, false);
+
+    pages_latch_[fid].lock();
+    latch_.unlock();
     if (pages_[fid].IsDirty()) {
       disk_manager_->WritePage(pages_[fid].GetPageId(), pages_[fid].GetData());
-      pages_[fid].is_dirty_ = false;
     }
-    page_table_.erase(page_table_.find(pages_[fid].GetPageId()));
-    pages_[fid].page_id_ = INVALID_PAGE_ID;
-    // replacer_->SetEvictable(fid, true);
 
-    free_list_.push_back(fid);
+    Page *res = &(pages_[fid]);
+    res->page_id_ = *page_id;
+    res->ResetMemory();
+    res->is_dirty_ = false;
+
+    res->pin_count_ = 1;
+
+    // latch_.lock();
+    pages_latch_[fid].unlock();
+    return res;
   }
   frame_id_t fid = free_list_.front();
   free_list_.pop_front();
+  *page_id = AllocatePage();
+  page_table_.insert(std::make_pair(*page_id, fid));
+
+  replacer_->RecordAccess(fid);
+  replacer_->SetEvictable(fid, false);
 
   Page *res = &(pages_[fid]);
-  *page_id = AllocatePage();
+
+  pages_latch_[fid].lock();
+  latch_.unlock();
+
   res->page_id_ = *page_id;
   res->ResetMemory();
   res->is_dirty_ = false;
 
-  page_table_.insert(std::make_pair(*page_id, fid));
   res->pin_count_ = 1;
-  replacer_->RecordAccess(fid);
-  replacer_->SetEvictable(fid, false);
+  pages_latch_[fid].unlock();
 
-  latch_.unlock();
   return res;
 }
 
@@ -130,27 +138,18 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
  */
 
 auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType access_type) -> Page * {
-  latch_.lock_shared();
-  for (size_t i = 0; i < pool_size_; ++i) {
-    if (pages_[i].GetPinCount() == 0 && pages_[i].page_id_ != INVALID_PAGE_ID) {
-      replacer_->SetEvictable(i, true);
-    }
-  }
-  latch_.unlock_shared();
-
   latch_.lock();
   auto it = page_table_.find(page_id);
   if (it != page_table_.end()) {
     frame_id_t fid = it->second;
-    // if (pages_[fid].IsDirty()) {
-    //   disk_manager_->WritePage(page_id, pages_[fid].GetData());
-    //   pages_[fid].is_dirty_ = false;
-    // }
-    // disk_manager_->ReadPage(page_id, pages_[fid].GetData());
-    // pages_[fid].is_dirty_ = false;
-    replacer_->RecordAccess(fid);
+    replacer_->RecordAccess(fid, access_type);
+
     replacer_->SetEvictable(fid, false);
+
+    pages_latch_[fid].lock();
     pages_[fid].pin_count_++;
+    pages_latch_[fid].unlock();
+
     latch_.unlock();
     return &(pages_[fid]);
   }
@@ -160,31 +159,57 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
       latch_.unlock();
       return nullptr;
     }
+    page_table_.erase(page_table_.find(pages_[fid].GetPageId()));
+    page_table_.insert(std::make_pair(page_id, fid));
+
+    replacer_->RecordAccess(fid, access_type);
+    replacer_->SetEvictable(fid, false);
+
+    pages_latch_[fid].lock();
+    latch_.unlock();
+
     if (pages_[fid].IsDirty()) {
       disk_manager_->WritePage(pages_[fid].GetPageId(), pages_[fid].GetData());
-      pages_[fid].is_dirty_ = false;
     }
-    // disk_manager_->ReadPage(page_id, pages_[fid].GetData());
-    page_table_.erase(page_table_.find(pages_[fid].GetPageId()));
-    pages_[fid].page_id_ = INVALID_PAGE_ID;
-    // replacer_->SetEvictable(fid, true);
-    free_list_.push_back(fid);
+
+    Page *res = &(pages_[fid]);
+    res->page_id_ = page_id;
+    res->ResetMemory();
+    // 从磁盘读入
+    disk_manager_->ReadPage(page_id, res->GetData());
+    // 由于刚刚读入，故而肯定不脏
+    res->is_dirty_ = false;
+
+    res->pin_count_ = 1;
+
+    // latch_.lock();
+    pages_latch_[fid].unlock();
+    return res;
   }
   frame_id_t fid = free_list_.front();
   free_list_.pop_front();
-
-  Page *res = &(pages_[fid]);
-  res->page_id_ = page_id;
-
   page_table_.insert(std::make_pair(page_id, fid));
-  res->ResetMemory();
-  disk_manager_->ReadPage(page_id, res->GetData());
-  res->is_dirty_ = false;
-  res->pin_count_ = 1;
-  replacer_->RecordAccess(fid);
+
+  replacer_->RecordAccess(fid, access_type);
+
   replacer_->SetEvictable(fid, false);
 
+  Page *res = &(pages_[fid]);
+
+  pages_latch_[fid].lock();
   latch_.unlock();
+
+  res->page_id_ = page_id;
+  res->ResetMemory();
+
+  // 从磁盘读入
+  disk_manager_->ReadPage(page_id, res->GetData());
+  // 由于刚刚读入，故而肯定不脏
+  res->is_dirty_ = false;
+
+  res->pin_count_ = 1;
+  pages_latch_[fid].unlock();
+
   return res;
 }
 
@@ -203,25 +228,32 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
  * @return false if the page is not in the page table or its pin count is <= 0 before this call, true otherwise
  */
 auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unused]] AccessType access_type) -> bool {
-  latch_.lock();
+  latch_.lock_shared();
   auto it = page_table_.find(page_id);
   if (it == page_table_.end()) {
-    latch_.unlock();
+    latch_.unlock_shared();
     return false;
   }
+
   frame_id_t fid = it->second;
+  pages_latch_[fid].lock();
   if (is_dirty) {
     pages_[fid].is_dirty_ = is_dirty;
   }
+
+  // pages_latch_[fid].lock();
   if (pages_[fid].GetPinCount() == 0) {
-    latch_.unlock();
+    latch_.unlock_shared();
+    pages_latch_[fid].unlock();
     return false;
   }
   pages_[fid].pin_count_--;
+  pages_latch_[fid].unlock();
+
   if (pages_[fid].GetPinCount() == 0) {
     replacer_->SetEvictable(fid, true);
   }
-  latch_.unlock();
+  latch_.unlock_shared();
   return true;
 }
 
@@ -234,16 +266,21 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
     return false;
   }
 
-  latch_.lock();
+  latch_.lock_shared();
   auto it = page_table_.find(page_id);
   if (it == page_table_.end()) {
-    latch_.unlock();
+    latch_.unlock_shared();
     return false;
   }
   frame_id_t fid = it->second;
+
+  pages_latch_[fid].lock();
+  //  latch_.unlock_shared();
+
   disk_manager_->WritePage(page_id, pages_[fid].GetData());
-  pages_[fid].is_dirty_ = false;
-  latch_.unlock();
+  pages_latch_[fid].unlock();
+
+  latch_.unlock_shared();
   return true;
 }
 
@@ -273,24 +310,36 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
     latch_.unlock();
     return true;
   }
+
   frame_id_t fid = it->second;
+  pages_latch_[fid].lock();
+
   if (pages_[fid].GetPinCount() != 0) {
+    pages_latch_[fid].unlock();
     latch_.unlock();
     return false;
   }
+  pages_latch_[fid].unlock();
+
+  page_table_.erase(it);
+  free_list_.push_back(fid);
+  replacer_->SetEvictable(fid, true);
+
+  pages_latch_[fid].lock();
+  //  latch_.unlock();
+
   // 此处是否写回存疑，我觉得是要的
   if (pages_[fid].IsDirty()) {
     disk_manager_->WritePage(page_id, pages_[fid].GetData());
-    pages_[fid].is_dirty_ = false;
   }
-  page_table_.erase(it);
   pages_[fid].page_id_ = INVALID_PAGE_ID;
   pages_[fid].ResetMemory();
   pages_[fid].is_dirty_ = false;
   pages_[fid].pin_count_ = 0;
-  replacer_->SetEvictable(fid, true);
-  free_list_.push_back(fid);
+  pages_latch_[fid].unlock();
+
   DeallocatePage(page_id);
+
   latch_.unlock();
   return true;
 }

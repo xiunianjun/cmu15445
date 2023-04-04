@@ -63,37 +63,42 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
   if (frame_id > static_cast<int>(capacity_)) {
     throw Exception(fmt::format("RecordAccess:frame_id invalid."));
   }
+
   bool is_find = false;
   std::lock_guard<std::mutex> lck(latch_);
   auto it = cache_data_.find(frame_id);
   if (it != cache_data_.end()) {
     is_find = true;
-    it->second.k_++;
-    it->second.history_.push_back(current_timestamp_++);
-    if (it->second.history_.size() > k_) {
-      it->second.history_.pop_front();
+    if (access_type != AccessType::Scan) {
+      it->second.k_++;
+      it->second.history_.push_back(current_timestamp_++);
+      if (it->second.history_.size() > k_) {
+        it->second.history_.pop_front();
+      }
     }
   }
   if (!is_find) {
     auto it = visit_record_.find(frame_id);
     if (it != visit_record_.end()) {
       is_find = true;
-      it->second.k_++;
-      it->second.history_.push_back(current_timestamp_++);
+      if (access_type != AccessType::Scan) {
+        it->second.k_++;
+        it->second.history_.push_back(current_timestamp_++);
 
-      if (it->second.history_.size() >= k_) {
-        LRUKNode node;
-        node.history_ = std::list(it->second.history_);
-        node.k_ = it->second.k_;
-        node.fid_ = it->first;
-        node.is_evictable_ = it->second.is_evictable_;
+        if (it->second.history_.size() >= k_) {
+          LRUKNode node;
+          node.history_ = std::list(it->second.history_);
+          node.k_ = it->second.k_;
+          node.fid_ = it->first;
+          node.is_evictable_ = it->second.is_evictable_;
 
-        if (it->second.is_evictable_) {
-          cache_size_++;
-          record_size_--;
+          if (it->second.is_evictable_) {
+            cache_size_++;
+            record_size_--;
+          }
+          cache_data_.emplace(node.fid_, node);
+          visit_record_.erase(it);
         }
-        cache_data_.emplace(node.fid_, node);
-        visit_record_.erase(it);
       }
     }
     if (!is_find) {
