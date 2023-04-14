@@ -17,8 +17,13 @@
 
 namespace bustub {
 
+// 这么长？
+// #define B_PLUS_TREE_INTERNAL_PAGE_TYPE BPlusTreeInternalPage<typename KeyType, ValueType, KeyComparator>
 #define B_PLUS_TREE_INTERNAL_PAGE_TYPE BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>
+// 这个size指的是base类的那三个字段的总长度
 #define INTERNAL_PAGE_HEADER_SIZE 12
+// 所以它意思是，每次划出一个page来存放结点，格局这么大
+// 这个计算方法就是，（物理页-header长度）/每个key-value映射的长度，这也就是max_size了
 #define INTERNAL_PAGE_SIZE ((BUSTUB_PAGE_SIZE - INTERNAL_PAGE_HEADER_SIZE) / (sizeof(MappingType)))
 /**
  * Store n indexed keys and n+1 child pointers (page_id) within internal page.
@@ -33,8 +38,14 @@ namespace bustub {
  * | HEADER | KEY(1)+PAGE_ID(1) | KEY(2)+PAGE_ID(2) | ... | KEY(n)+PAGE_ID(n) |
  *  --------------------------------------------------------------------------
  */
+// #define INDEX_TEMPLATE_ARGUMENTS template <typename KeyType, typename ValueType, typename KeyComparator>
 INDEX_TEMPLATE_ARGUMENTS
 class BPlusTreeInternalPage : public BPlusTreePage {
+ private:
+  // #define MappingType std::pair<KeyType, ValueType>
+  // Flexible array member for page data.
+  MappingType array_[0];
+
  public:
   // Deleted to disallow initialization
   BPlusTreeInternalPage() = delete;
@@ -99,8 +110,5 @@ class BPlusTreeInternalPage : public BPlusTreePage {
     return kstr;
   }
 
- private:
-  // Flexible array member for page data.
-  MappingType array_[0];
 };
 }  // namespace bustub
