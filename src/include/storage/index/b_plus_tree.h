@@ -42,6 +42,7 @@ class Context {
  public:
   // When you insert into / remove from the B+ tree, store the write guard of header page here.
   // Remember to drop the header page guard and set it to nullopt when you want to unlock all.
+  // ？？？
   std::optional<WritePageGuard> header_page_{std::nullopt};
 
   // Save the root page id here so that it's easier to know if the current page is the root page.
@@ -63,6 +64,34 @@ INDEX_TEMPLATE_ARGUMENTS
 class BPlusTree {
   using InternalPage = BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator>;
   using LeafPage = BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>;
+
+ private:
+  /* Debug Routines for FREE!! 这说的，不知道的还以为是促销大甩卖*/
+  void ToGraph(page_id_t page_id, const BPlusTreePage *page, std::ofstream &out);
+
+  void PrintTree(page_id_t page_id, const BPlusTreePage *page);
+
+  /**
+   * @brief Convert A B+ tree into a Printable B+ tree
+   *
+   * @param root_id
+   * @return PrintableNode
+   */
+  auto ToPrintableBPlusTree(page_id_t root_id) -> PrintableBPlusTree;
+
+  // member variable
+  std::string index_name_;
+  BufferPoolManager *bpm_;
+  KeyComparator comparator_;
+  std::vector<std::string> log;  // NOLINT
+  int leaf_max_size_;
+  int internal_max_size_;
+  page_id_t header_page_id_;
+  // 我是不是应该再加上个context成员？
+  Context context_;
+  // 每个结点的具体内容应该是存储在page guard->GetData()里吧？
+  // 然后我们就需要将data强制类型转换为什么leaf page或者internal page之类的就行
+  // root应该是算internal page
 
  public:
   explicit BPlusTree(std::string name, page_id_t header_page_id, BufferPoolManager *buffer_pool_manager,
@@ -115,29 +144,6 @@ class BPlusTree {
 
   // read data from file and remove one by one
   void RemoveFromFile(const std::string &file_name, Transaction *txn = nullptr);
-
- private:
-  /* Debug Routines for FREE!! */
-  void ToGraph(page_id_t page_id, const BPlusTreePage *page, std::ofstream &out);
-
-  void PrintTree(page_id_t page_id, const BPlusTreePage *page);
-
-  /**
-   * @brief Convert A B+ tree into a Printable B+ tree
-   *
-   * @param root_id
-   * @return PrintableNode
-   */
-  auto ToPrintableBPlusTree(page_id_t root_id) -> PrintableBPlusTree;
-
-  // member variable
-  std::string index_name_;
-  BufferPoolManager *bpm_;
-  KeyComparator comparator_;
-  std::vector<std::string> log;  // NOLINT
-  int leaf_max_size_;
-  int internal_max_size_;
-  page_id_t header_page_id_;
 };
 
 /**

@@ -37,7 +37,7 @@ namespace bustub {
  * | PageType (4) | CurrentSize (4) | MaxSize (4) |
  *  ---------------------------------------------------------------------
  *  -----------------------------------------------
- * |  NextPageId (4)
+ * |  NextPageId (4) 增加了这个
  *  -----------------------------------------------
  */
 INDEX_TEMPLATE_ARGUMENTS
@@ -58,6 +58,13 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   auto GetNextPageId() const -> page_id_t;
   void SetNextPageId(page_id_t next_page_id);
   auto KeyAt(int index) const -> KeyType;
+
+  /**
+   *我自己加的，因为我实在想不通为什么叶子结点没有valueat
+   * @param index the index
+   * @return the value at the index
+   */
+  auto ValueAt(int index) const -> ValueType;
 
   /**
    * @brief for test only return a string representing all keys in

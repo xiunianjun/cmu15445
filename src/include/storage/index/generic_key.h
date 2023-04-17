@@ -83,6 +83,7 @@ class GenericComparator {
       Value lhs_value = (lhs.ToValue(key_schema_, i));
       Value rhs_value = (rhs.ToValue(key_schema_, i));
 
+      // l<r return -1
       if (lhs_value.CompareLessThan(rhs_value) == CmpBool::CmpTrue) {
         return -1;
       }

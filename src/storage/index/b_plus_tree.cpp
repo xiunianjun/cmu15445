@@ -16,17 +16,30 @@ BPLUSTREE_TYPE::BPlusTree(std::string name, page_id_t header_page_id, BufferPool
       comparator_(std::move(comparator)),
       leaf_max_size_(leaf_max_size),
       internal_max_size_(internal_max_size),
-      header_page_id_(header_page_id) {
+      header_page_id_(header_page_id),
+      context_() {
+  // 我怎么没看懂这是在干什么？构造执行完之后，这两个局部变量不就被析构了吗，
+  // 这里先占用header_page_id再析构释放的目的是什么？？？
+  // 还是说要我们补充一下对context的填写？
   WritePageGuard guard = bpm_->FetchPageWrite(header_page_id_);
   auto root_page = guard.AsMut<BPlusTreeHeaderPage>();
   root_page->root_page_id_ = INVALID_PAGE_ID;
+
+  // TODO: 补全context参数 ?
 }
 
 /*
  * Helper function to decide whether current b+tree is empty
+1. 先根据header_page_id_.getdata得到根节点页面数据
+2. 再强制转换数据为internal page
+3. 判断internal page的size是否为0
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return true; }
+auto BPLUSTREE_TYPE::IsEmpty() const -> bool {
+  ReadPageGuard guard = bpm_->FetchPageRead(header_page_id_);
+  const InternalPage* root_page = guard.As<InternalPage>();
+  return root_page->GetSize() == 0;
+}
 /*****************************************************************************
  * SEARCH
  *****************************************************************************/
@@ -34,12 +47,47 @@ auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return true; }
  * Return the only value that associated with input key
  * This method is used for point query
  * @return : true means key exists
+leaf page存储的是RID吧？这里需要通过RID获取数据这一步吗？
+总之我们需要遍历我们的B+树，根据key获取value。
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *txn) -> bool {
-  // Declaration of context instance.
-  Context ctx;
-  (void)ctx;
+  // Declaration of context instance.？？？？
+  // Context ctx;
+  // (void)ctx;
+  // return false;
+  BasicPageGuard guard = bpm_->FetchPageBasic(header_page_id_);
+  InternalPage* root = guard.AsMut<InternalPage>();
+  if(root->GetSize() == 0){
+    return false;
+  }
+  while(true){
+    bool flag=false;
+    for(int i=1;i<root->GetSize();i++){
+      if(comparator_(key,root->KeyAt(i)) < 0){
+      // if(key<root->KeyAt(i)){
+        guard = bpm_->FetchPageBasic(root->ValueAt(i-1));
+        root = guard.AsMut<InternalPage>();
+        flag = true;
+        break;
+      }
+    }
+    if(!flag){
+      guard = bpm_->FetchPageBasic(root->ValueAt(root->GetSize()-1));
+      root = guard.AsMut<InternalPage>();
+    }
+    if(root->IsLeafPage()){
+      auto leaf = guard.As<LeafPage>();
+      for(int i=0;i<leaf->GetSize();i++){
+        if(comparator_(key,leaf->KeyAt(i)) == 0){
+        // if(key == leaf->KeyAt(i)){
+          result->push_back(static_cast<ValueType>(leaf->ValueAt(i)));
+          return true;
+        }
+      }
+      return false;
+    }
+  }
   return false;
 }
 
@@ -109,7 +157,7 @@ auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); 
  * @return Page id of the root of this tree
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::GetRootPageId() -> page_id_t { return 0; }
+auto BPLUSTREE_TYPE::GetRootPageId() -> page_id_t { return header_page_id_; }
 
 /*****************************************************************************
  * UTILITIES AND DEBUG

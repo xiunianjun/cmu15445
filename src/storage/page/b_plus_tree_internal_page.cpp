@@ -24,26 +24,26 @@ namespace bustub {
  * Including set page type, set current size, and set max page size
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Init(int max_size) {
-    max_size_ = max_size;
-    size_ = 0;
-    page_type_ = IndexPageType::INTERNAL_PAGE; 
+void BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::Init(int max_size) {
+    SetMaxSize(max_size);
+    SetSize(0);
+    SetPageType(IndexPageType::INTERNAL_PAGE);
 }
 /*
  * Helper method to get/set the key associated with input "index"(a.k.a
  * array offset)
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::KeyAt(int index) const -> KeyType {
-  if(index >= 1 && index < size_){
+auto BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::KeyAt(int index) const -> KeyType {
+  if(index >= 1 && index < GetSize()){
       return array_[index].first;
   }
   return {};
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
-  if(index >= 1 && index < size_){
+void BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::SetKeyAt(int index, const KeyType &key) {
+  if(index >= 1 && index < GetSize()){
       array_[index].first = std::move(key);
   }
 }
@@ -53,16 +53,18 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
  * offset)
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index) const -> ValueType {
-  if(index >= 0 && index < size_){
+auto BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::ValueAt(int index) const -> ValueType {
+  if(index >= 0 && index < GetSize()){
       return array_[index].second;
   }
   return {};
 }
-auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueIndex(const ValueType &value) const -> int {
-  for(int i=0;i<size_;i++){
+
+INDEX_TEMPLATE_ARGUMENTS
+auto BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::ValueIndex(const ValueType &value) const -> int {
+  for(int i=0;i<GetSize();i++){
       if(array_[i].second == value){
-	  return i;
+	      return i;
       }	
   }
   return -1;// 随便return了个不合理值

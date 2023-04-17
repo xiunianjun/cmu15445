@@ -19,7 +19,7 @@ namespace bustub {
 
 // 这么长？
 // #define B_PLUS_TREE_INTERNAL_PAGE_TYPE BPlusTreeInternalPage<typename KeyType, ValueType, KeyComparator>
-#define B_PLUS_TREE_INTERNAL_PAGE_TYPE BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>
+// #define B_PLUS_TREE_INTERNAL_PAGE_TYPE BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>
 // 这个size指的是base类的那三个字段的总长度
 #define INTERNAL_PAGE_HEADER_SIZE 12
 // 所以它意思是，每次划出一个page来存放结点，格局这么大
