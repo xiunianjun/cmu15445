@@ -66,6 +66,10 @@ class BPlusTreeLeafPage : public BPlusTreePage {
    */
   auto ValueAt(int index) const -> ValueType;
 
+  // 是我自己加的，我实在想不通为什么结点不能set key-value mapping
+  void SetKeyAt(int index, const KeyType &key);
+  void SetValueAt(int index, const ValueType &value);
+
   /**
    * @brief for test only return a string representing all keys in
    * this leaf page formatted as "(key1,key2,key3,...)"

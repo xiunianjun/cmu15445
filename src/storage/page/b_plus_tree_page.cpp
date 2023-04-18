@@ -30,12 +30,8 @@ auto BPlusTreePage::GetSize() const -> int { return size_; }
 void BPlusTreePage::SetSize(int size) {
     size_ = size;
 }
-void BPlusTreePage::IncreaseSize(int amount) {
-    // 是否需要增加max_size_的判断？我猜不用，因为后面估计会利用这个判断溢出
-    // if(size_ == max_size_){
-    //	 return ;
-    // }
-    size_ ++;
+void BPlusTreePage::IncreaseSize(int amount) { // amount为负数表示减小size
+    size_ += amount;
 }
 
 /*

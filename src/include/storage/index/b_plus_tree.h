@@ -87,8 +87,6 @@ class BPlusTree {
   int leaf_max_size_;
   int internal_max_size_;
   page_id_t header_page_id_;
-  // 我是不是应该再加上个context成员？
-  Context context_;
   // 每个结点的具体内容应该是存储在page guard->GetData()里吧？
   // 然后我们就需要将data强制类型转换为什么leaf page或者internal page之类的就行
   // root应该是算internal page

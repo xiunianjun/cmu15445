@@ -26,7 +26,7 @@ namespace bustub {
 INDEX_TEMPLATE_ARGUMENTS
 void BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::Init(int max_size) {
     SetMaxSize(max_size);
-    SetSize(0);
+    SetSize(1); // internal page默认有一个空子节点
     SetPageType(IndexPageType::INTERNAL_PAGE);
 }
 /*
@@ -35,7 +35,7 @@ void BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::Init(int max_size
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::KeyAt(int index) const -> KeyType {
-  if(index >= 1 && index < GetSize()){
+  if(index >= 1 && index < GetSize()){ // key从1开始遍历
       return array_[index].first;
   }
   return {};
@@ -45,6 +45,13 @@ INDEX_TEMPLATE_ARGUMENTS
 void BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::SetKeyAt(int index, const KeyType &key) {
   if(index >= 1 && index < GetSize()){
       array_[index].first = std::move(key);
+  }
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::SetValueAt(int index, const ValueType &value) {
+  if(index >= 0 && index < GetSize()){
+      array_[index].second = std::move(value);
   }
 }
 
