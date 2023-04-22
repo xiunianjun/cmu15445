@@ -35,6 +35,7 @@ TEST(BPlusTreeTests, InsertTest1) {
   auto header_page = bpm->NewPage(&page_id);
   ASSERT_EQ(page_id, HEADER_PAGE_ID);
   // create b+ tree
+  // 二叉？
   BPlusTree<GenericKey<8>, RID, GenericComparator<8>> tree("foo_pk", header_page->GetPageId(), bpm, comparator, 2, 3);
   GenericKey<8> index_key;
   RID rid;
