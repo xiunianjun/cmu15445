@@ -23,6 +23,7 @@ namespace bustub {
 
 using bustub::DiskManagerUnlimitedMemory;
 
+// 总之测试了一下新建B+树再插入一个结点非常地OK
 TEST(BPlusTreeTests, InsertTest1) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");

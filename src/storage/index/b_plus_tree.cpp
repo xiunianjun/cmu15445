@@ -125,7 +125,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     
     auto guard = bpm_->FetchPageWrite(ctx.root_page_id_);
     LeafPage* root = guard.AsMut<LeafPage>();// 注意，初始根节点为叶结点，之后键的根节点才为非叶结点。
-    root->Init();
+    root->Init(leaf_max_size_);
     root->IncreaseSize(1);
     root->SetKeyAt(0, key);
     root->SetValueAt(0, value);
@@ -162,7 +162,8 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     }
   }
 
-  auto leaf = guard.AsMut<LeafPage>();// 此处的guard还保留着上次对root赋值的情况，所以可以安全使用
+  auto leaf_guard = std::move(ctx.write_set_.back());
+  auto leaf = leaf_guard.AsMut<LeafPage>();
   if(!(ctx.write_set_.empty())){
     ctx.write_set_.pop_back();// 上面的迭代过程最后会把自己push进去，所以要先把自己pop出来
   }
@@ -189,7 +190,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       bpm_->NewPageGuarded(&new_root_page_id);
       auto new_root_guard = bpm_->FetchPageWrite(new_root_page_id);
       auto new_root = new_root_guard.AsMut<InternalPage>();
-      new_root->Init();
+      new_root->Init(internal_max_size_);
       new_root->SetValueAt(0,ctx.root_page_id_);
       auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
       header_page->root_page_id_ = new_root_page_id;
@@ -212,7 +213,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     bpm_->NewPageGuarded(&page_id);
     auto new_page_guard = bpm_->FetchPageWrite(page_id);
     auto new_page = new_page_guard.AsMut<LeafPage>();
-    new_page->Init();
+    new_page->Init(leaf_max_size_);
     // 将旧结点的后半部分匀给新结点
     new_page->IncreaseSize((m-1)/2);
     int idx = 0;
@@ -263,7 +264,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       bpm_->NewPageGuarded(&page_id);
       auto new_page_guard = bpm_->FetchPageWrite(page_id);
       auto new_page = new_page_guard.AsMut<InternalPage>();
-      new_page->Init();
+      new_page->Init(internal_max_size_);
       // 将旧结点的后半部分匀给新结点
       new_page->IncreaseSize((m-1)/2);// key0指向空
       int idx = 1; // 注意，从1开始
@@ -302,7 +303,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       bpm_->NewPageGuarded(&new_root_page_id);
       auto new_root_guard = bpm_->FetchPageWrite(new_root_page_id);
       auto new_root = new_page_guard.AsMut<InternalPage>();
-      new_root->Init();
+      new_root->Init(internal_max_size_);
       new_root->SetValueAt(0,ctx.root_page_id_);// 注意，设置key0对于value指向旧结点
       auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
       header_page->root_page_id_ = new_root_page_id;
@@ -319,7 +320,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       bpm_->NewPageGuarded(&page_id);
       auto new_page_guard = bpm_->FetchPageWrite(page_id);
       auto new_page = new_page_guard.AsMut<InternalPage>();
-      new_page->Init();
+      new_page->Init(internal_max_size_);
       // 将旧结点的后半部分匀给新结点.这个+1为第0个key的占位符
       new_page->IncreaseSize((m-1)/2);// key0指向空
       int idx = 1;
@@ -349,6 +350,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     }
     leaf->SetKeyAt(i,key);
     leaf->SetValueAt(i,value);
+    break;
   }
 
   // 释放header page的写锁
