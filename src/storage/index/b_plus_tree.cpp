@@ -196,7 +196,8 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       header_page->root_page_id_ = new_root_page_id;
       ctx.root_page_id_ = new_root_page_id;
 
-      root_guard = std::move(bpm_->FetchPageWrite(new_root_page_id));
+      // root_guard = std::move(bpm_->FetchPageWrite(new_root_page_id));
+      root_guard = std::move(new_root_guard);
     }else{
       // 否则，置为back()，并且pop_back()。
       root_guard = std::move(ctx.write_set_.back()); // 弹出父亲
@@ -205,7 +206,8 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     root = root_guard.AsMut<InternalPage>();
 
     // 记住m/2上取整的key
-    KeyType tmp_key = leaf->KeyAt((m+1)/2-1);
+    // KeyType tmp_key = leaf->KeyAt((m+1)/2-1);
+    KeyType tmp_key = leaf->KeyAt((m+1)/2);
 
     // 先分成两个结点
     // 创建新结点,记得map为<key,page_id>
@@ -215,7 +217,8 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     auto new_page = new_page_guard.AsMut<LeafPage>();
     new_page->Init(leaf_max_size_);
     // 将旧结点的后半部分匀给新结点
-    new_page->IncreaseSize((m-1)/2);
+    // new_page->IncreaseSize((m-1)/2);
+    new_page->IncreaseSize(m/2);
     int idx = 0;
     for(int i=(m+1)/2;i<m;i++){ // 对于那个要被移到父节点处的那个东西，它本来牵着的page_id会被转移到新结点的key0处
       new_page->SetKeyAt(idx,leaf->KeyAt(i));
@@ -223,9 +226,10 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       idx++;
     }
     // 缩小旧结点
-    leaf->IncreaseSize(-(m-1)/2);
+    // leaf->IncreaseSize(-(m-1)/2);
+    leaf->IncreaseSize(-m/2);
     // 最终向新节点插入new record
-    leaf = new_page;
+    leaf = std::move(new_page);
 
     // 将中间部分的那个结点copy插入到父亲中
     for(int i=1;i<=root->GetSize();i++){ // 注意，root为internal node，所以需要从1开始遍历
@@ -256,7 +260,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       // 分割结点
       m = root->GetSize();// 对于iNternal node，wiki中用的是(l+1)/2,其中的l+1其实正是getsize的返回值(也即child数量)
       // 记住m/2上取整的key
-      KeyType tmp_key = root->KeyAt((m+1)/2-1);
+      KeyType tmp_key = root->KeyAt((m+1)/2);
 
       // 先分成两个结点
       // 创建新结点,记得map为<key,page_id>
@@ -266,7 +270,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       auto new_page = new_page_guard.AsMut<InternalPage>();
       new_page->Init(internal_max_size_);
       // 将旧结点的后半部分匀给新结点
-      new_page->IncreaseSize((m-1)/2);// key0指向空
+      new_page->IncreaseSize(m/2);// key0指向空
       int idx = 1; // 注意，从1开始
       for(int i=(m+1)/2;i<m;i++){ // 对于那个要被移到父节点处的那个东西，它本来牵着的page_id会被转移到新结点的key0处
         new_page->SetKeyAt(idx,root->KeyAt(i));
@@ -274,7 +278,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
         idx++;
       }
       // 缩小旧结点
-      root->IncreaseSize(-(m-1)/2);
+      root->IncreaseSize(-m/2);
       // 将中间部分的那个结点插入到父亲中
       for(int i=1;i<=parent->GetSize();i++){
         if(i!=parent->GetSize()&&comparator_(tmp_key,parent->KeyAt(i)) > 0){
@@ -302,7 +306,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       page_id_t new_root_page_id;
       bpm_->NewPageGuarded(&new_root_page_id);
       auto new_root_guard = bpm_->FetchPageWrite(new_root_page_id);
-      auto new_root = new_page_guard.AsMut<InternalPage>();
+      auto new_root = new_root_guard.AsMut<InternalPage>();
       new_root->Init(internal_max_size_);
       new_root->SetValueAt(0,ctx.root_page_id_);// 注意，设置key0对于value指向旧结点
       auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
@@ -310,30 +314,33 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       ctx.root_page_id_ = new_root_page_id;
       new_root->IncreaseSize(1);
 
-      // 记住m/2上取整的key和value
-      KeyType tmp_key = root->KeyAt((m+1)/2-1);
-
       // 分割结点
       // 创建新结点,记得map为<key,page_id>
       m = root->GetSize();
+
+      // 记住m/2上取整的key和value
+      KeyType tmp_key = root->KeyAt((m+1)/2);
+
       page_id_t page_id;
       bpm_->NewPageGuarded(&page_id);
       auto new_page_guard = bpm_->FetchPageWrite(page_id);
       auto new_page = new_page_guard.AsMut<InternalPage>();
       new_page->Init(internal_max_size_);
       // 将旧结点的后半部分匀给新结点.这个+1为第0个key的占位符
-      new_page->IncreaseSize((m-1)/2);// key0指向空
+      new_page->IncreaseSize(m/2);// key0指向空
       int idx = 1;
       for(int i=(m+1)/2;i<m;i++){ // 对于那个要被移到父节点处的那个东西，它本来牵着的page_id会被转移到新结点的key0处
         new_page->SetKeyAt(idx,root->KeyAt(i));
         new_page->SetValueAt(idx,root->ValueAt(i));
+        idx++;
       }
       // 缩小旧结点
-      root->IncreaseSize(-(m-1)/2);
+      root->IncreaseSize(-m/2);
 
       // 将中间部分的那个结点插入到父亲中
-      new_root->SetKeyAt(new_page->GetSize()-1,tmp_key);
-      new_root->SetValueAt(new_page->GetSize()-1,page_id);
+      // new_root->SetKeyAt(new_page->GetSize()-1,tmp_key);
+      new_root->SetKeyAt(1,tmp_key);
+      new_root->SetValueAt(1,page_id);
     }
   }
 
@@ -483,8 +490,9 @@ void BPLUSTREE_TYPE::PrintTree(page_id_t page_id, const BPlusTreePage *page) {
 
     // Print the contents of the internal page.
     std::cout << "Contents: ";
-    for (int i = 0; i < internal->GetSize(); i++) {
-      std::cout << internal->KeyAt(i) << ": " << internal->ValueAt(i);
+    for (int i = 1; i < internal->GetSize(); i++) {
+      // std::cout << internal->KeyAt(i) << ": " << internal->ValueAt(i);
+      std::cout << internal->KeyAt(i);
       if ((i + 1) < internal->GetSize()) {
         std::cout << ", ";
       }
