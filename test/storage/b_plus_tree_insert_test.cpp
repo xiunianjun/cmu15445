@@ -91,7 +91,7 @@ TEST(BPlusTreeTests, InsertTest2) {
     index_key.SetFromInteger(key);
     tree.Insert(index_key, rid, transaction);
   }
-  tree.Print(bpm);
+  // tree.Print(bpm);
   std::vector<RID> rids;
   for (auto key : keys) {
     rids.clear();
@@ -162,6 +162,8 @@ TEST(BPlusTreeTests, InsertTest3) {
     int64_t value = key & 0xFFFFFFFF;
     EXPECT_EQ(rids[0].GetSlotNum(), value);
   }
+
+  tree.Print(bpm);
 
   int64_t start_key = 1;
   int64_t current_key = start_key;

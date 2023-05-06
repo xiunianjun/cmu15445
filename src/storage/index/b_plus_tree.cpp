@@ -228,6 +228,8 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     // 缩小旧结点
     // leaf->IncreaseSize(-(m-1)/2);
     leaf->IncreaseSize(-m/2);
+    new_page->SetNextPageId(leaf->GetNextPageId());
+    leaf->SetNextPageId(page_id);
     // 最终向新节点插入new record
     leaf = std::move(new_page);
 
@@ -392,14 +394,18 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
  * Input parameter is void, find the leftmost leaf page first, then construct
  * index iterator
  * @return : index iterator
+ 思路：找到最左叶结点对应的pageid然后return一个new的iterator对象。
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); }
+auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE { 
+  return INDEXITERATOR_TYPE(); 
+  }
 
 /*
  * Input parameter is low key, find the leaf page that contains the input key
  * first, then construct index iterator
  * @return : index iterator
+ 思路：找到key对应的pageid然后return一个new的iterator对象。
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); }
