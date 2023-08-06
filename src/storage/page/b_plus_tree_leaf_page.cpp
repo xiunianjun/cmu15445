@@ -37,6 +37,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::Init(int max_size) {
 /*
  * Helper method to get the value associated with input "index"(a.k.a array
  * offset)
+ * 叶子结点key-value一一对应，所以这里直接用index访问即可。
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::ValueAt(int index) const -> ValueType {

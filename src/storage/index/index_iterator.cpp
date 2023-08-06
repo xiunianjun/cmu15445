@@ -29,9 +29,15 @@ auto INDEXITERATOR_TYPE::IsEnd() -> bool { return  pgid_ == INVALID_PAGE_ID; }
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator*() -> const MappingType & { 
     auto page = guard_.As<LeafPage>();
-    return std::pair<KeyType, ValueType>(page->KeyAt(cnt), page->ValueAt(cnt));  
+    auto res = new MappingType(std::pair<KeyType, ValueType>(page->KeyAt(cnt), page->ValueAt(cnt)));
+    return *res;
 }
 
+/*
+ * 我这实现的大概意思就是，如果我们还是在一页叶结点中那么就返回叶结点中的entry；
+ * 否则，返回链表上下一个叶结点的初始迭代器（因为cnt == 0）
+ * 我好厉害那时候
+*/
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & { 
     auto page = guard_.As<LeafPage>();
@@ -39,7 +45,8 @@ auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
     if(cnt < page->GetSize()){
         return *this;
     }
-    return IndexIterator(bpm_, page->GetNextPageId());
+    auto res = new IndexIterator(bpm_, page->GetNextPageId());
+    return *res;
 }
 
 template class IndexIterator<GenericKey<4>, RID, GenericComparator<4>>;

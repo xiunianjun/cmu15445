@@ -35,7 +35,7 @@ void BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::Init(int max_size
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::KeyAt(int index) const -> KeyType {
-  if(index >= 1 && index < GetSize()){ // key从1开始遍历
+  if(index >= 1 && index < GetSize()){ // key从1开始遍历，0代表最左区间
       return array_[index].first;
   }
   return {};
