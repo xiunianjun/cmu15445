@@ -72,7 +72,7 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
     if (root->IsLeafPage()) { // 如果到了leaf这一层
       // 此时guard跟root指向的是同一页，这样做是安全的
       auto leaf = guard.As<LeafPage>();
-      for (int i = 0; i < leaf->GetSize(); i++) { // 对于leaf page，需要从0开始遍历key map
+      for (int i = 0; i < leaf->GetSize(); i ++) { // 对于leaf page，需要从0开始遍历key map
         if (comparator_(key, leaf->KeyAt(i)) == 0) { // 找到target
           result->push_back(static_cast<ValueType>(leaf->ValueAt(i)));
           return true;
@@ -83,16 +83,16 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
 
     // TODO: 这里可以合起来，不用flag判断。但我现在有点懒，之后再干。
     bool flag = false;
-    for (int i = 1; i < root->GetSize(); i++) { // 对于internal page，需要从1开始遍历key map
+    for (int i = 1; i < root->GetSize(); i ++) { // 对于internal page，需要从1开始遍历key map
       if (comparator_(key, root->KeyAt(i)) < 0) { // 如果target < 当前key，说明target在该key左边
-        guard = bpm_->FetchPageBasic(root->ValueAt(i-1));
+        guard = bpm_->FetchPageBasic(root->ValueAt(i - 1));
         root = guard.AsMut<InternalPage>(); // 去左孩子处
         flag = true;
         break;
       }
     }
     if (!flag) {
-      guard = bpm_->FetchPageBasic(root->ValueAt(root->GetSize()-1));
+      guard = bpm_->FetchPageBasic(root->ValueAt(root->GetSize() - 1));
       root = guard.AsMut<InternalPage>();// 去最右孩子处
     }
   }
@@ -422,8 +422,32 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE { 
-  return INDEXITERATOR_TYPE(); 
+  // 获取root page
+  BasicPageGuard guard = bpm_->FetchPageBasic(header_page_id_);
+  auto header_page = guard.As<BPlusTreeHeaderPage>();
+  auto res_pgid = header_page->root_page_id_;
+  if (header_page->root_page_id_ == INVALID_PAGE_ID) {
+    return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
   }
+  
+  guard = bpm_->FetchPageBasic(header_page->root_page_id_);
+  InternalPage* root = guard.AsMut<InternalPage>();
+
+  while (true) {
+    if (root->IsLeafPage()) { // 如果到了leaf这一层
+      return INDEXITERATOR_TYPE(bpm_, res_pgid);
+    }
+
+    res_pgid = root->ValueAt(0);
+    guard = bpm_->FetchPageBasic(root->ValueAt(0));
+    root = guard.AsMut<InternalPage>();
+  }
+
+  BUSTUB_ASSERT(false, "b+ tree Begin() wrong!\n");
+
+  // theorily unreachable
+  return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
+}
 
 /*
  * Input parameter is low key, find the leaf page that contains the input key
@@ -432,7 +456,60 @@ auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE {
  思路：找到key对应的pageid然后return一个new的iterator对象。
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); }
+auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE {
+  // 想了想还是直接从Begin开始迭代更帅
+  auto it = Begin();
+  while (!(it.IsEnd() || comparator_((*it).first, key) == 0)) {
+    ++ it;
+  }
+  return it;
+
+  // // 获取root page
+  // BasicPageGuard guard = bpm_->FetchPageBasic(header_page_id_);
+  // auto header_page = guard.As<BPlusTreeHeaderPage>();
+  // auto res_pgid = header_page->root_page_id_;
+  // if (header_page->root_page_id_ == INVALID_PAGE_ID) {
+  //   return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
+  // }
+  
+  // guard = bpm_->FetchPageBasic(header_page->root_page_id_);
+  // InternalPage* root = guard.AsMut<InternalPage>();
+
+  // while (true) {
+  //   if (root->IsLeafPage()) { // 如果到了leaf这一层
+  //     // 此时guard跟root指向的是同一页，这样做是安全的
+  //     auto leaf = guard.As<LeafPage>();
+  //     for (int i = 0; i < leaf->GetSize(); i ++) { // 对于leaf page，需要从0开始遍历key map
+  //       if (comparator_(key, leaf->KeyAt(i)) == 0) { // 找到target
+  //         return INDEXITERATOR_TYPE(bpm_, res_pgid, i);
+  //       }
+  //     }
+  //     // 未找到target
+  //     return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
+  //   }
+
+  //   bool flag = false;
+  //   for (int i = 1; i < root->GetSize(); i ++) { // 对于internal page，需要从1开始遍历key map
+  //     if (comparator_(key, root->KeyAt(i)) < 0) { // 如果target < 当前key，说明target在该key左边
+  //       res_pgid = root->ValueAt(i - 1);
+  //       guard = bpm_->FetchPageBasic(root->ValueAt(i - 1));
+  //       root = guard.AsMut<InternalPage>(); // 去左孩子处
+  //       flag = true;
+  //       break;
+  //     }
+  //   }
+  //   if (!flag) {
+  //     res_pgid = root->ValueAt(i - 1);
+  //     guard = bpm_->FetchPageBasic(root->ValueAt(root->GetSize() - 1));
+  //     root = guard.AsMut<InternalPage>();// 去最右孩子处
+  //   }
+  // }
+
+  // BUSTUB_ASSERT(false, "b+ tree Begin() wrong!\n");
+
+  // // theorily unreachable
+  // return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
+}
 
 /*
  * Input parameter is void, construct an index iterator representing the end
@@ -440,7 +517,33 @@ auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE { return IN
  * @return : index iterator
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); }
+auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE { 
+  // 获取root page
+  BasicPageGuard guard = bpm_->FetchPageBasic(header_page_id_);
+  auto header_page = guard.As<BPlusTreeHeaderPage>();
+  auto res_pgid = header_page->root_page_id_;
+  if (header_page->root_page_id_ == INVALID_PAGE_ID) {
+    return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
+  }
+  
+  guard = bpm_->FetchPageBasic(header_page->root_page_id_);
+  InternalPage* root = guard.AsMut<InternalPage>();
+
+  while (true) {
+    if (root->IsLeafPage()) { // 如果到了leaf这一层
+      return INDEXITERATOR_TYPE(bpm_, res_pgid, root->GetSize() - 1);
+    }
+
+    res_pgid = root->ValueAt(root->GetSize() - 1);
+    guard = bpm_->FetchPageBasic(root->ValueAt(root->GetSize() - 1));
+    root = guard.AsMut<InternalPage>();
+  }
+
+  BUSTUB_ASSERT(false, "b+ tree Begin() wrong!\n");
+
+  // theorily unreachable
+  return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
+}
 
 /**
  * @return Page id of the root of this tree

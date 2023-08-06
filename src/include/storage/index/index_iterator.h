@@ -25,7 +25,9 @@ using LeafPage = BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>;
  public:
   // you may define your own constructor based on your member variables
   IndexIterator();
+  IndexIterator(INDEXITERATOR_TYPE &it) ;
   IndexIterator(BufferPoolManager *bpm, page_id_t pgid) ;
+  IndexIterator(BufferPoolManager *bpm, page_id_t pgid, int cnt) ;
   ~IndexIterator();  // NOLINT
 
   auto IsEnd() -> bool;
@@ -34,15 +36,15 @@ using LeafPage = BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>;
 
   auto operator++() -> IndexIterator &;
 
-  auto operator==(const IndexIterator &itr) const -> bool { throw std::runtime_error("unimplemented"); }
+  auto operator==(const IndexIterator &itr) const -> bool ;
 
-  auto operator!=(const IndexIterator &itr) const -> bool { throw std::runtime_error("unimplemented"); }
+  auto operator!=(const IndexIterator &itr) const -> bool ;
 
  private:
   // add your own private member variables here
   BufferPoolManager* bpm_;
   page_id_t pgid_;
-  int cnt = 0;
+  int cnt_ = 0;
   ReadPageGuard guard_;
 };
 
