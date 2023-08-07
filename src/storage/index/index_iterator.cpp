@@ -71,11 +71,11 @@ INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & { 
     auto page = guard_.As<LeafPage>();
     cnt_ ++;
-    if(cnt_ < page->GetSize()){
-        return *this;
+    if (cnt_ >= page->GetSize()) {
+        pgid_ = page->GetNextPageId();
+        cnt_ = 0;
     }
-    auto res = new INDEXITERATOR_TYPE(bpm_, page->GetNextPageId());
-    return *res;
+    return *this;
 }
 
 template class IndexIterator<GenericKey<4>, RID, GenericComparator<4>>;

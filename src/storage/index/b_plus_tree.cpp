@@ -518,30 +518,6 @@ auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE {
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE { 
-  // 获取root page
-  BasicPageGuard guard = bpm_->FetchPageBasic(header_page_id_);
-  auto header_page = guard.As<BPlusTreeHeaderPage>();
-  auto res_pgid = header_page->root_page_id_;
-  if (header_page->root_page_id_ == INVALID_PAGE_ID) {
-    return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
-  }
-  
-  guard = bpm_->FetchPageBasic(header_page->root_page_id_);
-  InternalPage* root = guard.AsMut<InternalPage>();
-
-  while (true) {
-    if (root->IsLeafPage()) { // 如果到了leaf这一层
-      return INDEXITERATOR_TYPE(bpm_, res_pgid, root->GetSize() - 1);
-    }
-
-    res_pgid = root->ValueAt(root->GetSize() - 1);
-    guard = bpm_->FetchPageBasic(root->ValueAt(root->GetSize() - 1));
-    root = guard.AsMut<InternalPage>();
-  }
-
-  BUSTUB_ASSERT(false, "b+ tree Begin() wrong!\n");
-
-  // theorily unreachable
   return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
 }
 
