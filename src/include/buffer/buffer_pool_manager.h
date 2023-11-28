@@ -35,7 +35,6 @@ class BufferPoolManager {
   /** Number of pages in the buffer pool. */
   const size_t pool_size_;
   /** The next page id to be allocated  */
-  // atomic原子类，很保障线程安全
   std::atomic<page_id_t> next_page_id_ = 0;
 
   /** Array of buffer pool pages. */
@@ -48,7 +47,6 @@ class BufferPoolManager {
   std::unordered_map<page_id_t, frame_id_t> page_table_;
   /** Replacer to find unpinned pages for replacement. */
   std::unique_ptr<LRUKReplacer> replacer_;
-  // std::unique_ptr<LRUKReplacer> replacer_;
   /** List of free frames that don't have any pages on them. */
   std::list<frame_id_t> free_list_;
   /** This latch protects shared data structures. We recommend updating this comment to describe what it protects. */
@@ -57,14 +55,12 @@ class BufferPoolManager {
 
   /**
    * @brief Allocate a page on disk. Caller should acquire the latch before calling this function.
-   * 调用时应该持有锁
    * @return the id of the allocated page
    */
   auto AllocatePage() -> page_id_t;
 
   /**
    * @brief Deallocate a page on disk. Caller should acquire the latch before calling this function.
-   * 调用时应该持有锁
    * @param page_id id of the page to deallocate
    */
   void DeallocatePage(__attribute__((unused)) page_id_t page_id) {
@@ -112,11 +108,6 @@ class BufferPoolManager {
    * @param[out] page_id id of created page
    * @return nullptr if no new pages could be created, otherwise pointer to new page
    */
-  // 我们应该需要做:
-  // 如果replacer已满(freelist.empty())，则先调用其Evict方法；如果调用完后还是满，就return nullptr
-  // 记得调用完Evict后要把frame_id存入freelist,并且检查下其对应Page是否dirty
-  // new一个Page对象，填写其信息，包括调用AllocatePage获取page_id、从freelist中取号并放入replacer、初始化其data域
-  // 记得call setevictable来pin，和recoradaccess
   auto NewPage(page_id_t *page_id) -> Page *;
 
   /**
@@ -150,11 +141,6 @@ class BufferPoolManager {
    * @param access_type type of access to the page, only needed for leaderboard tests.
    * @return nullptr if page_id cannot be fetched, otherwise pointer to the requested page
    */
-  // 首先查找page_table，在的话直接返回
-  // 然后再找free_list,free_list没有就调用evict,还是没有的话就返回nullptr.记得old dirty写入
-  // 调用newpage
-  // 从diskmanager把数据读进来。old dirty写入
-  // 跟newpage一样都要记得调用replacer的方法
   auto FetchPage(page_id_t page_id, AccessType access_type = AccessType::Unknown) -> Page *;
 
   /**
@@ -223,7 +209,6 @@ class BufferPoolManager {
    * @param page_id id of page to be deleted
    * @return false if the page exists but could not be deleted, true if the page didn't exist or deletion succeeded
    */
-  // 里面肯定要做的：删page_table_中的entry,检查是否dirty，是的话记得调用diskmanager写回
   auto DeletePage(page_id_t page_id) -> bool;
 };
 }  // namespace bustub

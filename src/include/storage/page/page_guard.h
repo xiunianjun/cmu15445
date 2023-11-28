@@ -85,8 +85,6 @@ class BasicPageGuard {
   [[maybe_unused]] BufferPoolManager *bpm_{nullptr};
   Page *page_{nullptr};
   bool is_dirty_{false};
-  bool valid_{true};  // indicates whether the page guard is valid to use
-  bool is_unpin_{false};
 };
 
 class ReadPageGuard {
@@ -147,7 +145,6 @@ class ReadPageGuard {
  private:
   // You may choose to get rid of this and add your own private variables.
   BasicPageGuard guard_;
-  bool should_release_{true};
 };
 
 class WritePageGuard {
@@ -216,7 +213,6 @@ class WritePageGuard {
  private:
   // You may choose to get rid of this and add your own private variables.
   BasicPageGuard guard_;
-  bool should_release_{true};
 };
 
 }  // namespace bustub

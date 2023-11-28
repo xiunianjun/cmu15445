@@ -14,12 +14,10 @@ namespace bustub {
  * guards and have the pin count decrease by 2.
  */
 BasicPageGuard::BasicPageGuard(BasicPageGuard &&that) noexcept {
-  valid_ = that.valid_;
   page_ = that.page_;
-  is_unpin_ = that.is_unpin_;
+  that.page_ = nullptr;
   is_dirty_ = that.is_dirty_;
   bpm_ = that.bpm_;
-  that.valid_ = false;
 }
 
 /** TODO(P1): Add implementation
@@ -32,14 +30,10 @@ BasicPageGuard::BasicPageGuard(BasicPageGuard &&that) noexcept {
  * per the specification in the writeup.
  */
 void BasicPageGuard::Drop() {
-  if (!valid_) {
-    return;
-  }
-  if (!is_unpin_ && bpm_ != nullptr && page_ != nullptr) {
+  if (bpm_ != nullptr && page_ != nullptr) {
     bpm_->UnpinPage(page_->GetPageId(), is_dirty_);
-    is_unpin_ = true;
+    page_ = nullptr;
   }
-  valid_ = false;
 }
 
 /** TODO(P1): Add implementation
@@ -55,13 +49,10 @@ void BasicPageGuard::Drop() {
  */
 auto BasicPageGuard::operator=(BasicPageGuard &&that) noexcept -> BasicPageGuard & {
   Drop();
-  is_unpin_ = that.is_unpin_;
-  that.is_unpin_ = true;
-  valid_ = that.valid_;
   page_ = that.page_;
+  that.page_ = nullptr;
   is_dirty_ = that.is_dirty_;
   bpm_ = that.bpm_;
-  that.valid_ = false;
 
   return *this;
 }
@@ -77,9 +68,8 @@ BasicPageGuard::~BasicPageGuard() { Drop(); };  // NOLINT
  * about if there's any way you can make this easier for yourself...
  */
 ReadPageGuard::ReadPageGuard(ReadPageGuard &&that) noexcept {
-  should_release_ = that.should_release_;
-  that.should_release_ = false;
   guard_ = BasicPageGuard(std::move(that.guard_));
+  that.guard_.page_ = nullptr;
 }
 
 /** TODO(P1): Add implementation
@@ -92,8 +82,7 @@ ReadPageGuard::ReadPageGuard(ReadPageGuard &&that) noexcept {
 auto ReadPageGuard::operator=(ReadPageGuard &&that) noexcept -> ReadPageGuard & {
   Drop();
   guard_ = std::move(that.guard_);
-  should_release_ = that.should_release_;
-  that.should_release_ = false;
+  that.guard_.page_ = nullptr;
   return *this;
 }
 
@@ -107,37 +96,37 @@ auto ReadPageGuard::operator=(ReadPageGuard &&that) noexcept -> ReadPageGuard & 
  * want to release these resources.
  */
 void ReadPageGuard::Drop() {
-  guard_.Drop();
-
-  if (should_release_ && guard_.page_ != nullptr) {
-    guard_.page_->RUnlatch();
-    should_release_ = false;
+  auto page = guard_.page_;
+  if (page == nullptr) {
+    return;
   }
+
+  guard_.Drop();
+  page->RUnlatch();
 }
 
 ReadPageGuard::~ReadPageGuard() { Drop(); }  // NOLINT
 
 WritePageGuard::WritePageGuard(WritePageGuard &&that) noexcept {
-  should_release_ = that.should_release_;
-  that.should_release_ = false;
   guard_ = BasicPageGuard(std::move(that.guard_));
+  that.guard_.page_ = nullptr;
 }
 
 auto WritePageGuard::operator=(WritePageGuard &&that) noexcept -> WritePageGuard & {
   Drop();
   guard_ = std::move(that.guard_);
-  should_release_ = that.should_release_;
-  that.should_release_ = false;
+  that.guard_.page_ = nullptr;
   return *this;
 }
 
 void WritePageGuard::Drop() {
-  guard_.Drop();
-
-  if (should_release_ && guard_.page_ != nullptr) {
-    guard_.page_->WUnlatch();
-    should_release_ = false;
+  auto page = guard_.page_;
+  if (page == nullptr) {
+    return;
   }
+
+  guard_.Drop();
+  page->WUnlatch();
 }
 
 WritePageGuard::~WritePageGuard() { Drop(); }

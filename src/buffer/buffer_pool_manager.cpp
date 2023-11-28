@@ -28,17 +28,12 @@ BufferPoolManager::BufferPoolManager(size_t pool_size, DiskManager *disk_manager
 
   // Initially, every page is in the free list.
   for (size_t i = 0; i < pool_size_; ++i) {
-    free_list_.emplace_back(static_cast<int>(i));
+    free_list_.emplace_back(static_cast<frame_id_t>(i));
   }
 }
 
 BufferPoolManager::~BufferPoolManager() { delete[] pages_; }
 
-// 我们应该需要做:
-// 如果replacer已满(freelist.empty())，则先调用其Evict方法；如果调用完后还是满，就return nullptr
-// 记得调用完Evict后要把frame_id存入freelist,并且检查下其对应Page是否dirty
-// 得到一个free的Page对象，填写其信息，包括调用AllocatePage获取page_id、从freelist中取号并放入replacer、初始化其data域
-// 记得call setevictable来pin，和recoradaccess
 /**
  * TODO(P1): Add implementation
  *
@@ -56,17 +51,17 @@ BufferPoolManager::~BufferPoolManager() { delete[] pages_; }
  * @param[out] page_id id of created page
  * @return nullptr if no new pages could be created, otherwise pointer to new page
  */
-
 auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   latch_.lock();
-  if (free_list_.empty()) {
+
+  if (free_list_.empty()) {  // has no free page containers, evict one
     frame_id_t fid;
-    if (!replacer_->Evict(&fid)) {
-      // 是否要设置为该值还存疑
+    if (!replacer_->Evict(&fid)) {  // has no way to evict
       *page_id = INVALID_PAGE_ID;
       latch_.unlock();
       return nullptr;
     }
+
     page_table_.erase(page_table_.find(pages_[fid].GetPageId()));
     *page_id = AllocatePage();
     page_table_.insert(std::make_pair(*page_id, fid));
@@ -76,7 +71,7 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
 
     pages_latch_[fid].lock();
     latch_.unlock();
-    if (pages_[fid].IsDirty()) {
+    if (pages_[fid].IsDirty()) {  // write origin back
       disk_manager_->WritePage(pages_[fid].GetPageId(), pages_[fid].GetData());
     }
 
@@ -84,13 +79,12 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
     res->page_id_ = *page_id;
     res->ResetMemory();
     res->is_dirty_ = false;
-
     res->pin_count_ = 1;
 
-    // latch_.lock();
     pages_latch_[fid].unlock();
     return res;
   }
+
   frame_id_t fid = free_list_.front();
   free_list_.pop_front();
   *page_id = AllocatePage();
@@ -114,11 +108,6 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   return res;
 }
 
-// 首先查找page_table，在的话直接返回
-// 然后再找free_list,free_list没有就调用evict,还是没有的话就返回nullptr.记得old dirty写入
-// 调用newpage
-// 从diskmanager把数据读进来。old dirty写入
-// 跟newpage一样都要记得调用replacer的方法
 /**
  * TODO(P1): Add implementation
  *
@@ -139,6 +128,7 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
 
 auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType access_type) -> Page * {
   latch_.lock();
+
   auto it = page_table_.find(page_id);
   if (it != page_table_.end()) {
     frame_id_t fid = it->second;
@@ -153,6 +143,7 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
     latch_.unlock();
     return &(pages_[fid]);
   }
+
   if (free_list_.empty()) {
     frame_id_t fid;
     if (!replacer_->Evict(&fid)) {
@@ -175,14 +166,12 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
     Page *res = &(pages_[fid]);
     res->page_id_ = page_id;
     res->ResetMemory();
-    // 从磁盘读入
+    // read from disk
     disk_manager_->ReadPage(page_id, res->GetData());
-    // 由于刚刚读入，故而肯定不脏
     res->is_dirty_ = false;
 
     res->pin_count_ = 1;
 
-    // latch_.lock();
     pages_latch_[fid].unlock();
     return res;
   }
@@ -202,9 +191,8 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
   res->page_id_ = page_id;
   res->ResetMemory();
 
-  // 从磁盘读入
+  // read from disk
   disk_manager_->ReadPage(page_id, res->GetData());
-  // 由于刚刚读入，故而肯定不脏
   res->is_dirty_ = false;
 
   res->pin_count_ = 1;
@@ -241,7 +229,6 @@ auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unus
     pages_[fid].is_dirty_ = is_dirty;
   }
 
-  // pages_latch_[fid].lock();
   if (pages_[fid].GetPinCount() == 0) {
     latch_.unlock_shared();
     pages_latch_[fid].unlock();
@@ -251,16 +238,12 @@ auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unus
   pages_latch_[fid].unlock();
 
   if (pages_[fid].GetPinCount() == 0) {
-    replacer_->SetEvictable(fid, true);
+    replacer_->SetEvictable(fid, true);  // can only be evict when has no pin count
   }
   latch_.unlock_shared();
   return true;
 }
 
-/*
-/   * Use the DiskManager::WritePage() method to flush a page to disk, REGARDLESS of the dirty flag.
-/   * Unset the dirty flag of the page after flushing.
-*/
 auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
   if (page_id == INVALID_PAGE_ID) {
     return false;
@@ -275,9 +258,10 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
   frame_id_t fid = it->second;
 
   pages_latch_[fid].lock();
-  //  latch_.unlock_shared();
 
   disk_manager_->WritePage(page_id, pages_[fid].GetData());
+  pages_[fid].is_dirty_ = false;
+
   pages_latch_[fid].unlock();
 
   latch_.unlock_shared();
@@ -326,9 +310,7 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
   replacer_->SetEvictable(fid, true);
 
   pages_latch_[fid].lock();
-  //  latch_.unlock();
 
-  // 此处是否写回存疑，我觉得是要的
   if (pages_[fid].IsDirty()) {
     disk_manager_->WritePage(page_id, pages_[fid].GetData());
   }
