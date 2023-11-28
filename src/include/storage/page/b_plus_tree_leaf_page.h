@@ -37,8 +37,7 @@ namespace bustub {
  * | PageType (4) | CurrentSize (4) | MaxSize (4) |
  *  ---------------------------------------------------------------------
  *  -----------------------------------------------
- * |  NextPageId (4) 增加了这个。毕竟叶结点页形成了一个链表结构，所以这个叶结点会连着下一个叶结点
- * 故而需要保存链表结构的下一个叶结点的pg id
+ * |  NextPageId (4) 
  *  -----------------------------------------------
  */
 INDEX_TEMPLATE_ARGUMENTS
@@ -66,6 +65,7 @@ class BPlusTreeLeafPage : public BPlusTreePage {
    * @return the value at the index
    */
   auto ValueAt(int index) const -> ValueType;
+  auto PairAt(int index) const -> const MappingType &;
 
   // 是我自己加的，我实在想不通为什么结点不能set key-value mapping
   void SetKeyAt(int index, const KeyType &key);

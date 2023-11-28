@@ -36,14 +36,16 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::Init(int max_size) {
 /*
  * Helper method to get the value associated with input "index"(a.k.a array
  * offset)
- * 叶子结点key-value一一对应，所以这里直接用index访问即可。
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::ValueAt(int index) const -> ValueType {
-  if(index >= 0 && index < GetSize()){
-      return array_[index].second;
-  }
-  return {};
+  BUSTUB_ASSERT(index >= 0 && index < GetSize(), "key should be a valid value");
+  return array_[index].second;
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::PairAt(int index) const -> const MappingType & {
+  return array_[index];
 }
 
 /**
@@ -53,9 +55,7 @@ INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::GetNextPageId() const -> page_id_t { return next_page_id_; }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) {
-  next_page_id_ = next_page_id;
-}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) { next_page_id_ = next_page_id; }
 
 /*
  * Helper method to find and return the key associated with input "index"(a.k.a
@@ -63,24 +63,20 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) {
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType {
-  if(index >= 0 && index < GetSize()){
-      return array_[index].first;
-  }
-  return {};
+  BUSTUB_ASSERT(index >= 0 && index < GetSize(), "key should be a valid value");
+  return array_[index].first;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
-  if(index >= 0 && index < GetSize()){
-      array_[index].first = std::move(key);
-  }
+  BUSTUB_ASSERT(index >= 0 && index < GetSize(), "key should be a valid value");
+  array_[index].first = std::move(key);
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::SetValueAt(int index, const ValueType &value) {
-  if(index >= 0 && index < GetSize()){
-      array_[index].second = std::move(value);
-  }
+  BUSTUB_ASSERT(index >= 0 && index < GetSize(), "key should be a valid value");
+  array_[index].second = std::move(value);
 }
 
 

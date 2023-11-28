@@ -150,7 +150,6 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     if (root->IsLeafPage()) {
       break;
     }
-
     bool flag = false;
     for (int i = 1; i < root->GetSize(); i ++) { // for internal page, traverse the key map begin with 1
       if (comparator_(key, root->KeyAt(i)) < 0) { // if target < current key, target is in the lefthand of key
@@ -163,7 +162,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     }
     if (!flag) {
       guard = std::move(bpm_->FetchPageWrite(root->ValueAt(root->GetSize() - 1)));
-      root = guard.AsMut<InternalPage>();// goto most right child
+      root = guard.AsMut<InternalPage>(); // goto most right child
       ctx.write_set_.push_back(std::move(guard));
     }
   }
@@ -171,7 +170,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   auto leaf_guard = std::move(ctx.write_set_.back());
   auto leaf = leaf_guard.AsMut<LeafPage>();
   if (!(ctx.write_set_.empty())) {
-    ctx.write_set_.pop_back();// the target leaf was pushed to ctx above
+    ctx.write_set_.pop_back();  // the target leaf was pushed to ctx above
   }
 
   // check is here first
@@ -195,6 +194,8 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   WritePageGuard new_page_guard;
   InternalPage* new_page;
 
+  // Though I think there must be a waiy to merge this case with the below while(),
+  // I finally decide not to do a merging for a more clear code.
   if (leaf->GetSize() == leaf->GetMaxSize()) {
     m = leaf->GetSize();
     tmp_key = leaf->KeyAt((m + 1) / 2);
@@ -416,23 +417,22 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
  * Input parameter is void, find the leftmost leaf page first, then construct
  * index iterator
  * @return : index iterator
- 思路：找到最左叶结点对应的pageid然后return一个new的iterator对象。
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE { 
-  // 获取root page
+  // get root page
   BasicPageGuard guard = bpm_->FetchPageBasic(header_page_id_);
   auto header_page = guard.As<BPlusTreeHeaderPage>();
   auto res_pgid = header_page->root_page_id_;
   if (header_page->root_page_id_ == INVALID_PAGE_ID) {
-    return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
+    return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID);
   }
   
   guard = bpm_->FetchPageBasic(header_page->root_page_id_);
   InternalPage* root = guard.AsMut<InternalPage>();
 
   while (true) {
-    if (root->IsLeafPage()) { // 如果到了leaf这一层
+    if (root->IsLeafPage()) {
       return INDEXITERATOR_TYPE(bpm_, res_pgid);
     }
 
@@ -441,72 +441,23 @@ auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE {
     root = guard.AsMut<InternalPage>();
   }
 
-  BUSTUB_ASSERT(false, "b+ tree Begin() wrong!\n");
-
   // theorily unreachable
-  return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
+  BUSTUB_ASSERT(false, "b+ tree Begin() wrong!\n");
+  return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID);
 }
 
 /*
  * Input parameter is low key, find the leaf page that contains the input key
  * first, then construct index iterator
  * @return : index iterator
- 思路：找到key对应的pageid然后return一个new的iterator对象。
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE {
-  // 想了想还是直接从Begin开始迭代更帅
   auto it = Begin();
   while (!(it.IsEnd() || comparator_((*it).first, key) == 0)) {
     ++ it;
   }
   return it;
-
-  // // 获取root page
-  // BasicPageGuard guard = bpm_->FetchPageBasic(header_page_id_);
-  // auto header_page = guard.As<BPlusTreeHeaderPage>();
-  // auto res_pgid = header_page->root_page_id_;
-  // if (header_page->root_page_id_ == INVALID_PAGE_ID) {
-  //   return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
-  // }
-  
-  // guard = bpm_->FetchPageBasic(header_page->root_page_id_);
-  // InternalPage* root = guard.AsMut<InternalPage>();
-
-  // while (true) {
-  //   if (root->IsLeafPage()) { // 如果到了leaf这一层
-  //     // guard and root is now pointing to the same page, so it is safe here
-  //     auto leaf = guard.As<LeafPage>();
-  //     for (int i = 0; i < leaf->GetSize(); i ++) { // for leaf page, traverse the key map begin with 0
-  //       if (comparator_(key, leaf->KeyAt(i)) == 0) { // get target
-  //         return INDEXITERATOR_TYPE(bpm_, res_pgid, i);
-  //       }
-  //     }
-  //     // not get target
-  //     return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
-  //   }
-
-  //   bool flag = false;
-  //   for (int i = 1; i < root->GetSize(); i ++) { // for internal page, traverse the key map begin with 1
-  //     if (comparator_(key, root->KeyAt(i)) < 0) { // if target < current key, target is in the lefthand of key
-  //       res_pgid = root->ValueAt(i - 1);
-  //       guard = bpm_->FetchPageBasic(root->ValueAt(i - 1));
-  //       root = guard.AsMut<InternalPage>(); // goto left child
-  //       flag = true;
-  //       break;
-  //     }
-  //   }
-  //   if (!flag) {
-  //     res_pgid = root->ValueAt(i - 1);
-  //     guard = bpm_->FetchPageBasic(root->ValueAt(root->GetSize() - 1));
-  //     root = guard.AsMut<InternalPage>();// goto most right child
-  //   }
-  // }
-
-  // BUSTUB_ASSERT(false, "b+ tree Begin() wrong!\n");
-
-  // // theorily unreachable
-  // return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
 }
 
 /*
@@ -516,7 +467,7 @@ auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE {
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE { 
-  return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID); // TODO: 错误处理有待斟酌
+  return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID);
 }
 
 /**
@@ -525,7 +476,7 @@ auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE {
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::GetRootPageId() -> page_id_t {
   auto guard = std::move(bpm_->FetchPageWrite(header_page_id_));
-  // 获取root page id
+  // get root page id
   auto header_page = guard.AsMut<BPlusTreeHeaderPage>();
   return header_page->root_page_id_; 
 }

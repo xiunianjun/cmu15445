@@ -24,9 +24,9 @@ namespace bustub {
  * Including set page type, set current size, and set max page size
  */
 INDEX_TEMPLATE_ARGUMENTS
-void BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::Init(int max_size) {
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Init(int max_size) {
     SetMaxSize(max_size);
-    SetSize(1); // internal page默认有一个空子节点
+    SetSize(1); // internal page has a child defaultly
     SetPageType(IndexPageType::INTERNAL_PAGE);
 }
 /*
@@ -34,25 +34,21 @@ void BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::Init(int max_size
  * array offset)
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::KeyAt(int index) const -> KeyType {
-  if(index >= 1 && index < GetSize()){ // key从1开始遍历，0代表最左区间
-      return array_[index].first;
-  }
-  return {};
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::KeyAt(int index) const -> KeyType {
+  BUSTUB_ASSERT(index >= 1 && index < GetSize(), "key should be a valid value"); // first key is invalid
+  return array_[index].first;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::SetKeyAt(int index, const KeyType &key) {
-  if(index >= 1 && index < GetSize()){
-      array_[index].first = std::move(key);
-  }
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
+  BUSTUB_ASSERT(index >= 1 && index < GetSize(), "key should be a valid value"); // first key is invalid
+  array_[index].first = std::move(key);
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::SetValueAt(int index, const ValueType &value) {
-  if(index >= 0 && index < GetSize()){
-      array_[index].second = std::move(value);
-  }
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetValueAt(int index, const ValueType &value) {
+  BUSTUB_ASSERT(index >= 0 && index < GetSize(), "key should be a valid value"); // first key is invalid
+  array_[index].second = std::move(value);
 }
 
 /*
@@ -60,21 +56,19 @@ void BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::SetValueAt(int in
  * offset)
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::ValueAt(int index) const -> ValueType {
-  if(index >= 0 && index < GetSize()){
-      return array_[index].second;
-  }
-  return {};
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index) const -> ValueType {
+  BUSTUB_ASSERT(index >= 0 && index < GetSize(), "key should be a valid value"); // first key is invalid
+  return array_[index].second;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>::ValueIndex(const ValueType &value) const -> int {
-  for(int i=0;i<GetSize();i++){
-      if(array_[i].second == value){
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueIndex(const ValueType &value) const -> int {
+  for(int i = 0; i < GetSize(); i ++) {
+      if(array_[i].second == value) {
 	      return i;
       }	
   }
-  return -1;// 随便return了个不合理值
+  return -1;
 }
 
 
