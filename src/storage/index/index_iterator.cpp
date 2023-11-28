@@ -61,11 +61,6 @@ auto INDEXITERATOR_TYPE::operator!=(const IndexIterator &itr) const -> bool {
     return !((pgid_ == itr.pgid_) && (cnt_ == itr.cnt_));
 }
 
-/*
- * 我这实现的大概意思就是，如果我们还是在一页叶结点中那么就返回叶结点中的entry；
- * 否则，返回链表上下一个叶结点的初始迭代器（因为cnt_ == 0）
- * 我好厉害那时候
-*/
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & { 
     auto page = guard_.As<LeafPage>();
