@@ -48,8 +48,7 @@ auto INDEXITERATOR_TYPE::IsEnd() -> bool { return  pgid_ == INVALID_PAGE_ID; }
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator*() -> const MappingType & { 
     auto page = guard_.As<LeafPage>();
-    auto res = new MappingType(std::pair<KeyType, ValueType>(page->KeyAt(cnt_), page->ValueAt(cnt_)));
-    return *res;
+    return page->PairAt(cnt_);
 }
 
 INDEX_TEMPLATE_ARGUMENTS
