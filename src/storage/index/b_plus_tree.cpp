@@ -17,7 +17,7 @@ BPLUSTREE_TYPE::BPlusTree(std::string name, page_id_t header_page_id, BufferPool
       leaf_max_size_(leaf_max_size),
       internal_max_size_(internal_max_size),
       header_page_id_(header_page_id) {
-  // 在header中记录root page的信息
+  // record the root page
   WritePageGuard guard = bpm_->FetchPageWrite(header_page_id_);
   auto header_page = guard.AsMut<BPlusTreeHeaderPage>();
   header_page->root_page_id_ = INVALID_PAGE_ID;
@@ -25,9 +25,6 @@ BPLUSTREE_TYPE::BPlusTree(std::string name, page_id_t header_page_id, BufferPool
 
 /*
  * Helper function to decide whether current b+tree is empty
-1. 先根据header_page_id_.getdata得到根节点页面数据
-2. 再强制转换数据为internal page
-3. 判断internal page的size是否为0
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::IsEmpty() const -> bool {
@@ -43,7 +40,7 @@ auto BPLUSTREE_TYPE::IsEmpty() const -> bool {
   if (root_page->IsLeafPage()) {
     return (root_page->GetSize() == 0);
   }
-  return root_page->GetSize() <= 1;
+  return root_page->GetSize() <= 1; // TODO: Can root be one value internal page?
 }
 
 /*****************************************************************************
@@ -53,12 +50,9 @@ auto BPLUSTREE_TYPE::IsEmpty() const -> bool {
  * Return the only value that associated with input key
  * This method is used for point query
  * @return : true means key exists
-leaf page存储的是RID吧？这里需要通过RID获取数据这一步吗？
-总之我们需要遍历我们的B+树，根据key获取value。
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *txn) -> bool {
-  // 获取root page
   BasicPageGuard guard = bpm_->FetchPageBasic(header_page_id_);
   auto header_page = guard.As<BPlusTreeHeaderPage>();
   if (header_page->root_page_id_ == INVALID_PAGE_ID) {
@@ -140,6 +134,8 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     return true;
   }
 
+  BUSTUB_ASSERT(ctx.root_page_id_ != INVALID_PAGE_ID, "root page id should be valid.");
+
   // 获取root page
   auto guard = bpm_->FetchPageWrite(ctx.root_page_id_);
   InternalPage* root = guard.AsMut<InternalPage>();
@@ -178,10 +174,8 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   // 先检查是否已存在再插入
   for (int i = 0; i < leaf->GetSize(); i++) { // 对于leaf page，需要从0开始遍历key map
     if (comparator_(key,leaf->KeyAt(i)) == 0) { // 对应key已存在
-      // TODO: change to: ctx.write_set_.clear()
-      while (!(ctx.write_set_.empty())) {
-        ctx.write_set_.pop_back();
-      }
+      ctx.write_set_.clear();
+      ctx.header_page_ = std::nullopt;
       return false;
     }
   }
@@ -191,8 +185,13 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   // 但我对于父节点的处理是先插结点，然后判断满然后再分裂，不知道有没有问题
   // ...感觉显然有问题啊！！！！你这么造是因为数据还小没有超过一页的结点数，
   // 数据量大了就不好了。不过这改也不难，之后出问题了再说吧
+  bool should_split = (leaf->GetSize() == leaf->GetMaxSize());
+  KeyType tmp_key;
+  page_id_t page_id;
+  int m;
+
   if (leaf->GetSize() == leaf->GetMaxSize()) {
-    int m = leaf->GetSize();
+    m = leaf->GetSize();
 
     // 获取当前leaf结点的父节点root
     WritePageGuard root_guard;
@@ -223,12 +222,11 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     root = root_guard.AsMut<InternalPage>();
 
     // 记住m/2上取整的key
-    KeyType tmp_key = leaf->KeyAt((m + 1) / 2);
+    tmp_key = leaf->KeyAt((m + 1) / 2);
 
     /* 先分成两个结点 */
 
     // 创建新结点,记得map为<key,page_id>
-    page_id_t page_id;
     bpm_->NewPageGuarded(&page_id);
     auto new_page_guard = bpm_->FetchPageWrite(page_id);
     auto new_page = new_page_guard.AsMut<LeafPage>();
@@ -249,128 +247,23 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     leaf->SetNextPageId(page_id);
     // 最终向新节点插入new record，所以我们修改了leaf变量的引用
     leaf = std::move(new_page);
-
-    // 将中间部分的那个结点copy插入到父亲中
-    for (int i = 1; i <= root->GetSize(); i++) { // 注意，root必为internal node，所以需要从1开始遍历
-      if (i != root->GetSize() && comparator_(tmp_key, root->KeyAt(i)) > 0) {
+    // 插入结点
+    for (int i = 0; i <= leaf->GetSize(); i ++) {
+      if (i != leaf->GetSize() && comparator_(key, leaf->KeyAt(i)) > 0) {
         continue;
       }
       // 插入到i-1的位置
-      root->IncreaseSize(1);
-      for (int j = root->GetSize() - 1; j >= i + 1; j --) {
-        root->SetKeyAt(j,root->KeyAt(j-1));
-        root->SetValueAt(j,root->ValueAt(j-1));
+      leaf->IncreaseSize(1);
+      for (int j = leaf->GetSize() - 1; j >= i + 1; j --) {
+        leaf->SetKeyAt(j, leaf->KeyAt(j - 1));
+        leaf->SetValueAt(j, leaf->ValueAt(j - 1));
       }
-      root->SetKeyAt(i, tmp_key);
-      root->SetValueAt(i, page_id);// 注意指向new leaf page
+      leaf->SetKeyAt(i, key);
+      leaf->SetValueAt(i, value);
       break;
-    }
-
-    // 向上生长处理
-    while (!(ctx.write_set_.empty())) {
-      if (root->GetSize() <= root->GetMaxSize()) {
-        break;
-      }
-
-      /* 需要进行分裂 */
-      // 获取当前结点root的parent
-      auto parent_guard = std::move(ctx.write_set_.back());
-      InternalPage* parent = parent_guard.AsMut<InternalPage>();
-      ctx.write_set_.pop_back();
-
-      // 分割结点
-      m = root->GetSize();
-      // 记住m/2上取整的key
-      KeyType tmp_key = root->KeyAt((m + 1) / 2);
-
-      // 先分成两个结点
-      // 创建新结点,记得map为<key,page_id>
-      page_id_t page_id;
-      bpm_->NewPageGuarded(&page_id);
-      auto new_page_guard = bpm_->FetchPageWrite(page_id);
-      auto new_page = new_page_guard.AsMut<InternalPage>();
-      new_page->Init(internal_max_size_);
-      // 将旧结点的后半部分匀给新结点
-      new_page->IncreaseSize(m / 2);// key0指向空
-      int idx = 1; // 注意，从1开始
-      for (int i = (m + 1) / 2; i < m; i ++) { // 对于那个要被移到父节点处的那个东西，它本来牵着的page_id会被转移到新结点的key0处
-        new_page->SetKeyAt(idx, root->KeyAt(i));
-        new_page->SetValueAt(idx, root->ValueAt(i));
-        idx ++;
-      }
-      // 缩小旧结点
-      root->IncreaseSize(-m/2);
-      // 将中间部分的那个结点插入到父亲中
-      for (int i = 1; i <= parent->GetSize(); i ++) {
-        if (i != parent->GetSize() && comparator_(tmp_key, parent->KeyAt(i)) > 0) {
-          continue;
-        }
-        // 插入到i-1的位置
-        parent->IncreaseSize(1);
-        for (int j = parent->GetSize() - 1; j >= i + 1; j --) {
-          parent->SetKeyAt(j, parent->KeyAt(j - 1));
-          parent->SetValueAt(j, parent->ValueAt(j - 1));
-        }
-        parent->SetKeyAt(i, tmp_key);
-        parent->SetValueAt(i, page_id);// 注意指向new leaf page
-        break;
-      }
-
-      root = parent;
-    }
-
-    // 如果满足该条件，说明root也需要进行分裂
-    // 如果是root的话，那么就需要：
-    // 1.新申请一页，并且将key0设置为旧结点
-    // 2.登记到header中
-    if(root->GetSize() > root->GetMaxSize()){
-      // 创建并初始化根节点
-      page_id_t new_root_page_id;
-      bpm_->NewPageGuarded(&new_root_page_id);
-      auto new_root_guard = bpm_->FetchPageWrite(new_root_page_id);
-      auto new_root = new_root_guard.AsMut<InternalPage>();
-      new_root->Init(internal_max_size_);
-
-      new_root->SetValueAt(0, ctx.root_page_id_);// 注意，设置key0对于value指向旧结点
-
-      auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
-      header_page->root_page_id_ = new_root_page_id;
-      ctx.root_page_id_ = new_root_page_id;
-
-      new_root->IncreaseSize(1);
-      // 分割结点
-      // 创建新结点,记得map为<key,page_id>
-      m = root->GetSize();
-
-      // 记住m/2上取整的key和value
-      KeyType tmp_key = root->KeyAt((m + 1) / 2);
-
-      page_id_t page_id;
-      bpm_->NewPageGuarded(&page_id);
-      auto new_page_guard = bpm_->FetchPageWrite(page_id);
-      auto new_page = new_page_guard.AsMut<InternalPage>();
-      new_page->Init(internal_max_size_);
-      // 将旧结点的后半部分匀给新结点.这个+1为第0个key的占位符
-      new_page->IncreaseSize(m / 2);// key0指向空
-      int idx = 1;
-      for (int i = (m + 1) / 2; i < m; i ++) { // 对于那个要被移到父节点处的那个东西，它本来牵着的page_id会被转移到新结点的key0处
-        new_page->SetKeyAt(idx, root->KeyAt(i));
-        new_page->SetValueAt(idx, root->ValueAt(i));
-        idx ++;
-      }
-      // 缩小旧结点
-      root->IncreaseSize(-m/2);
-
-      // 将中间部分的那个结点插入到父亲中
-      // new_root->SetKeyAt(new_page->GetSize()-1,tmp_key);
-      new_root->SetKeyAt(1, tmp_key);
-      new_root->SetValueAt(1, page_id);
     }
   }
 
-  // 好了，这下总算该分裂的都分裂完了，我们总算可以将新结点插入到叶结点中了！！！
-
-  // 插入结点
   for (int i = 0; i <= leaf->GetSize(); i ++) {
     if (i != leaf->GetSize() && comparator_(key, leaf->KeyAt(i)) > 0) {
       continue;
@@ -386,6 +279,130 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     break;
   }
 
+  if (!should_split) {
+    goto INSERTION_END;
+  }
+
+  // 将中间部分的那个结点copy插入到父亲中
+  for (int i = 1; i <= root->GetSize(); i++) { // 注意，root必为internal node，所以需要从1开始遍历
+    if (i != root->GetSize() && comparator_(tmp_key, root->KeyAt(i)) > 0) {
+      continue;
+    }
+    // 插入到i-1的位置
+    root->IncreaseSize(1);
+    for (int j = root->GetSize() - 1; j >= i + 1; j --) {
+      root->SetKeyAt(j,root->KeyAt(j-1));
+      root->SetValueAt(j,root->ValueAt(j-1));
+    }
+    root->SetKeyAt(i, tmp_key);
+    root->SetValueAt(i, page_id);// 注意指向new leaf page
+    break;
+  }
+
+  // 向上生长处理
+  while (!(ctx.write_set_.empty())) {
+    if (root->GetSize() < root->GetMaxSize()) {
+      break;
+    }
+
+    /* 需要进行分裂 */
+    // 获取当前结点root的parent
+    auto parent_guard = std::move(ctx.write_set_.back());
+    InternalPage* parent = parent_guard.AsMut<InternalPage>();
+    ctx.write_set_.pop_back();
+
+    // 分割结点
+    m = root->GetSize();
+    // 记住m/2上取整的key
+    KeyType tmp_key = root->KeyAt((m + 1) / 2);
+
+    // 先分成两个结点
+    // 创建新结点,记得map为<key,page_id>
+    page_id_t page_id;
+    bpm_->NewPageGuarded(&page_id);
+    auto new_page_guard = bpm_->FetchPageWrite(page_id);
+    auto new_page = new_page_guard.AsMut<InternalPage>();
+    new_page->Init(internal_max_size_);
+    // 将旧结点的后半部分匀给新结点
+    new_page->IncreaseSize(m / 2);// key0指向空
+    int idx = 1; // 注意，从1开始
+    for (int i = (m + 1) / 2; i < m; i ++) { // 对于那个要被移到父节点处的那个东西，它本来牵着的page_id会被转移到新结点的key0处
+      new_page->SetKeyAt(idx, root->KeyAt(i));
+      new_page->SetValueAt(idx, root->ValueAt(i));
+      idx ++;
+    }
+    // 缩小旧结点
+    root->IncreaseSize(-m/2);
+    // 将中间部分的那个结点插入到父亲中
+    for (int i = 1; i <= parent->GetSize(); i ++) {
+      if (i != parent->GetSize() && comparator_(tmp_key, parent->KeyAt(i)) > 0) {
+        continue;
+      }
+      // 插入到i-1的位置
+      parent->IncreaseSize(1);
+      for (int j = parent->GetSize() - 1; j >= i + 1; j --) {
+        parent->SetKeyAt(j, parent->KeyAt(j - 1));
+        parent->SetValueAt(j, parent->ValueAt(j - 1));
+      }
+      parent->SetKeyAt(i, tmp_key);
+      parent->SetValueAt(i, page_id);// 注意指向new leaf page
+      break;
+    }
+
+    root = parent;
+  }
+
+  // 如果满足该条件，说明root也需要进行分裂
+  // 如果是root的话，那么就需要：
+  // 1.新申请一页，并且将key0设置为旧结点
+  // 2.登记到header中
+  if(root->GetSize() > root->GetMaxSize()){
+    // 创建并初始化根节点
+    page_id_t new_root_page_id;
+    bpm_->NewPageGuarded(&new_root_page_id);
+    auto new_root_guard = bpm_->FetchPageWrite(new_root_page_id);
+    auto new_root = new_root_guard.AsMut<InternalPage>();
+    new_root->Init(internal_max_size_);
+
+    new_root->SetValueAt(0, ctx.root_page_id_);// 注意，设置key0对于value指向旧结点
+
+    auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
+    header_page->root_page_id_ = new_root_page_id;
+    ctx.root_page_id_ = new_root_page_id;
+
+    new_root->IncreaseSize(1);
+    // 分割结点
+    // 创建新结点,记得map为<key,page_id>
+    m = root->GetSize();
+
+    // 记住m/2上取整的key和value
+    KeyType tmp_key = root->KeyAt((m + 1) / 2);
+
+    page_id_t page_id;
+    bpm_->NewPageGuarded(&page_id);
+    auto new_page_guard = bpm_->FetchPageWrite(page_id);
+    auto new_page = new_page_guard.AsMut<InternalPage>();
+    new_page->Init(internal_max_size_);
+    // 将旧结点的后半部分匀给新结点.这个+1为第0个key的占位符
+    new_page->IncreaseSize(m / 2);// key0指向空
+    int idx = 1;
+    for (int i = (m + 1) / 2; i < m; i ++) { // 对于那个要被移到父节点处的那个东西，它本来牵着的page_id会被转移到新结点的key0处
+      new_page->SetKeyAt(idx, root->KeyAt(i));
+      new_page->SetValueAt(idx, root->ValueAt(i));
+      idx ++;
+    }
+    // 缩小旧结点
+    root->IncreaseSize(-m/2);
+
+    // 将中间部分的那个结点插入到父亲中
+    // new_root->SetKeyAt(new_page->GetSize()-1,tmp_key);
+    new_root->SetKeyAt(1, tmp_key);
+    new_root->SetValueAt(1, page_id);
+  }
+
+  // add tmp to root
+
+INSERTION_END:
   // 释放header page的写锁
   while (!(ctx.write_set_.empty())) {
     ctx.write_set_.pop_back();
