@@ -290,9 +290,10 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     new_page = new_page_guard.AsMut<InternalPage>();
     new_page->Init(internal_max_size_);
     // allocate the second half of the old node to the new node evenly
-    new_page->IncreaseSize(m / 2);// remember that key0 is null
+    new_page->IncreaseSize(m / 2 - 1);// remember that key0 is null
+    new_page->SetValueAt(0, root->ValueAt((m + 1) / 2));
     idx = 1;
-    for (int i = (m + 1) / 2; i < m; i ++) { // the next page of the split point will give to the key0 of the new node
+    for (int i = (m + 1) / 2 + 1; i < m; i ++) { // the next page of the split point will give to the key0 of the new node
       new_page->SetKeyAt(idx, root->KeyAt(i));
       new_page->SetValueAt(idx, root->ValueAt(i));
       idx ++;
@@ -333,9 +334,12 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     new_page = new_page_guard.AsMut<InternalPage>();
     new_page->Init(internal_max_size_);
     // allocate the second half of the old node to the new node evenly
-    new_page->IncreaseSize(m / 2);  // remember that key0 is null
+    new_page->IncreaseSize(m / 2 - 1);  // remember that key0 is null
+
+    // skip tmp_key
+    new_page->SetValueAt(0, root->ValueAt((m + 1) / 2));
     idx = 1;
-    for (int i = (m + 1) / 2; i < m; i ++) { // the next page of the split point will give to the key0 of the new node
+    for (int i = (m + 1) / 2 + 1; i < m; i ++) { // the next page of the split point will give to the key0 of the new node
       new_page->SetKeyAt(idx, root->KeyAt(i));
       new_page->SetValueAt(idx, root->ValueAt(i));
       idx ++;
