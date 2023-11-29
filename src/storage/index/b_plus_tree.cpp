@@ -225,9 +225,12 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     // link in the leaf iterator
     new_page->SetNextPageId(leaf->GetNextPageId());
     leaf->SetNextPageId(page_id);
-    // insert into new node finally
-    leaf = std::move(new_page);
-    leaf_guard = std::move(new_page_guard);
+      
+    if (comparator_(key, tmp_key) >= 0) {
+      // insert into new node finally
+      leaf = std::move(new_page);
+      leaf_guard = std::move(new_page_guard);
+    }
     
     if(ctx.write_set_.empty()) {  // root should be splited
       goto ROOT_SPLIT;
@@ -245,7 +248,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   }
 
   // split up
-  do {
+  while(true) {
     if (root->GetSize() < root->GetMaxSize()) {
       // insert into parent node
       BUSTUB_ASSERT(root->IsLeafPage() == false, "root must not be leaf page in the up split");
@@ -291,7 +294,13 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     new_page->Init(internal_max_size_);
     // allocate the second half of the old node to the new node evenly
     new_page->IncreaseSize(m / 2 - 1);// remember that key0 is null
-    new_page->SetValueAt(0, root->ValueAt((m + 1) / 2));
+    if (comparator_(insert_key, root->KeyAt((m + 1) / 2)) >= 0)
+      new_page->SetValueAt(0, root->ValueAt((m + 1) / 2));
+    else {
+      insert_key = tmp_key;
+      new_page->SetValueAt(0, insert_val);
+      insert_val = root->ValueAt((m + 1) / 2);
+    }
     idx = 1;
     for (int i = (m + 1) / 2 + 1; i < m; i ++) { // the next page of the split point will give to the key0 of the new node
       new_page->SetKeyAt(idx, root->KeyAt(i));
@@ -321,7 +330,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     guard = std::move(parent_guard);
     insert_key = tmp_key;
     insert_val = page_id;
-  } while (!(ctx.write_set_.empty()));
+  }
 
   if(root->GetSize() == root->GetMaxSize()) { // root should be splited
     m = root->GetSize();
@@ -337,7 +346,13 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     new_page->IncreaseSize(m / 2 - 1);  // remember that key0 is null
 
     // skip tmp_key
-    new_page->SetValueAt(0, root->ValueAt((m + 1) / 2));
+    if (comparator_(insert_key, root->KeyAt((m + 1) / 2)) >= 0)
+      new_page->SetValueAt(0, root->ValueAt((m + 1) / 2));
+    else {
+      insert_key = tmp_key;
+      new_page->SetValueAt(0, insert_val);
+      insert_val = root->ValueAt((m + 1) / 2);
+    }
     idx = 1;
     for (int i = (m + 1) / 2 + 1; i < m; i ++) { // the next page of the split point will give to the key0 of the new node
       new_page->SetKeyAt(idx, root->KeyAt(i));
