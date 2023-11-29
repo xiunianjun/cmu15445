@@ -66,6 +66,7 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
     if (root->IsLeafPage()) {
       // guard and root is now pointing to the same page, so it is safe here
       auto leaf = guard.As<LeafPage>();
+      BUSTUB_ASSERT(leaf->IsLeafPage(), "leaf should be a leaf page!");
       for (int i = 0; i < leaf->GetSize(); i ++) { // for leaf page, traverse the key map begin with 0
         if (comparator_(key, leaf->KeyAt(i)) == 0) { // get target
           result->push_back(static_cast<ValueType>(leaf->ValueAt(i)));
@@ -175,6 +176,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
 
   // check is here first
   for (int i = 0; i < leaf->GetSize(); i++) { // for leaf page, traverse the key map begin with 0
+    BUSTUB_ASSERT(leaf->IsLeafPage(), "leaf should be a leaf page!");
     if (comparator_(key, leaf->KeyAt(i)) == 0) { // related key is here
       ctx.write_set_.clear();
       ctx.header_page_ = std::nullopt;
@@ -198,6 +200,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   // I finally decide not to do a merging for a more clear code.
   if (leaf->GetSize() == leaf->GetMaxSize()) {
     m = leaf->GetSize();
+    BUSTUB_ASSERT(m > 0, "leaf size must bigger than zero!");
     tmp_key = leaf->KeyAt((m + 1) / 2);
     insert_key = tmp_key;
 
@@ -224,17 +227,17 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     leaf->SetNextPageId(page_id);
     // insert into new node finally
     leaf = std::move(new_page);
+    leaf_guard = std::move(new_page_guard);
     
     if(ctx.write_set_.empty()) {  // root should be splited
       goto ROOT_SPLIT;
     }
 
     // get parent
-    WritePageGuard root_guard;
-    root_guard = std::move(ctx.write_set_.back());
+    guard = std::move(ctx.write_set_.back());
     ctx.write_set_.pop_back();
 
-    root = root_guard.AsMut<InternalPage>();
+    root = guard.AsMut<InternalPage>();
   }
 
   if (!should_split) {
@@ -246,6 +249,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     if (root->GetSize() < root->GetMaxSize()) {
       // insert into parent node
       BUSTUB_ASSERT(root->IsLeafPage() == false, "root must not be leaf page in the up split");
+      BUSTUB_ASSERT(root->GetSize() > 1, "root must have at least one element!");
       for (int i = 1; i <= root->GetSize(); i++) { // remember that root must be internal node here
         if (i != root->GetSize() && comparator_(insert_key, root->KeyAt(i)) > 0) {
           continue;
@@ -275,14 +279,15 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
 
     // split node
     m = root->GetSize();
+    BUSTUB_ASSERT(m > 0, "leaf size must bigger than zero!");
     KeyType tmp_key = root->KeyAt((m + 1) / 2);
 
     // split to two nodes first
     // create new node
     page_id_t page_id;
     bpm_->NewPageGuarded(&page_id);
-    auto new_page_guard = bpm_->FetchPageWrite(page_id);
-    auto new_page = new_page_guard.AsMut<InternalPage>();
+    new_page_guard = bpm_->FetchPageWrite(page_id);
+    new_page = new_page_guard.AsMut<InternalPage>();
     new_page->Init(internal_max_size_);
     // allocate the second half of the old node to the new node evenly
     new_page->IncreaseSize(m / 2);// remember that key0 is null
@@ -301,6 +306,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       }
       // insert into (i - 1)th position
       new_page->IncreaseSize(1);
+      BUSTUB_ASSERT(new_page->GetSize() > 1, "new_page must have at least one element!");
       for (int j = new_page->GetSize() - 1; j >= i + 1; j --) {
         new_page->SetKeyAt(j, new_page->KeyAt(j - 1));
         new_page->SetValueAt(j, new_page->ValueAt(j - 1));
@@ -311,12 +317,14 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     }
 
     root = parent;
+    guard = std::move(parent_guard);
     insert_key = tmp_key;
     insert_val = page_id;
   } while (!(ctx.write_set_.empty()));
 
   if(root->GetSize() == root->GetMaxSize()) { // root should be splited
     m = root->GetSize();
+    BUSTUB_ASSERT(m > 0, "leaf size must bigger than zero!");
 
     tmp_key = root->KeyAt((m + 1) / 2);
 
@@ -341,6 +349,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       }
       // insert into (i - 1)th position
       new_page->IncreaseSize(1);
+      BUSTUB_ASSERT(new_page->GetSize() > 1, "new_page must have at least one element!");
       for (int j = new_page->GetSize() - 1; j >= i + 1; j --) {
         new_page->SetKeyAt(j, new_page->KeyAt(j - 1));
         new_page->SetValueAt(j, new_page->ValueAt(j - 1));
@@ -373,6 +382,7 @@ ROOT_SPLIT:
 
 INSERTION_END:
   // insert the target
+  BUSTUB_ASSERT(leaf->IsLeafPage(), "leaf should be a leaf page!");
   for (int i = 0; i <= leaf->GetSize(); i ++) {
     if (i != leaf->GetSize() && comparator_(key, leaf->KeyAt(i)) > 0) {
       continue;
