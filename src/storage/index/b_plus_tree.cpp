@@ -189,12 +189,16 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   KeyType tmp_key;
   page_id_t page_id;
   int m;
-
+  int middle;
+  bool insert_small_than_tmp_key;
+  bool special = false;
   KeyType insert_key;
+  KeyType swap;
   page_id_t insert_val;
   int idx;
   WritePageGuard new_page_guard;
   InternalPage* new_page;
+  InternalPage* insert_page;
 
   // Though I think there must be a waiy to merge this case with the below while(),
   // I finally decide not to do a merging for a more clear code.
@@ -226,7 +230,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     new_page->SetNextPageId(leaf->GetNextPageId());
     leaf->SetNextPageId(page_id);
       
-    if (comparator_(key, tmp_key) >= 0) {
+    if (comparator_(key, tmp_key) > 0) {
       // insert into new node finally
       leaf = std::move(new_page);
       leaf_guard = std::move(new_page_guard);
@@ -283,7 +287,21 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     // split node
     m = root->GetSize();
     BUSTUB_ASSERT(m > 0, "leaf size must bigger than zero!");
-    KeyType tmp_key = root->KeyAt((m + 1) / 2);
+
+    special = false;
+    middle = (m + 1) / 2;
+    tmp_key = root->KeyAt(middle);
+    insert_small_than_tmp_key = (comparator_(insert_key, tmp_key) < 0);
+    if (insert_small_than_tmp_key) {
+      middle = m / 2;
+      tmp_key = root->KeyAt(middle);
+      if (comparator_(insert_key, tmp_key) >= 0) {
+        special = true;
+        swap = insert_key;
+        insert_key = tmp_key;
+        tmp_key = swap;
+      }
+    }
 
     // split to two nodes first
     // create new node
@@ -292,37 +310,42 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     new_page_guard = bpm_->FetchPageWrite(page_id);
     new_page = new_page_guard.AsMut<InternalPage>();
     new_page->Init(internal_max_size_);
-    // allocate the second half of the old node to the new node evenly
-    new_page->IncreaseSize(m / 2 - 1);// remember that key0 is null
-    if (comparator_(insert_key, root->KeyAt((m + 1) / 2)) >= 0)
-      new_page->SetValueAt(0, root->ValueAt((m + 1) / 2));
+
+    if (!special)
+      new_page->SetValueAt(0, root->ValueAt(middle));
     else {
-      insert_key = tmp_key;
       new_page->SetValueAt(0, insert_val);
-      insert_val = root->ValueAt((m + 1) / 2);
+      insert_val = root->ValueAt(middle);
     }
     idx = 1;
-    for (int i = (m + 1) / 2 + 1; i < m; i ++) { // the next page of the split point will give to the key0 of the new node
+    for (int i = middle + 1; i < m; i ++) { // the next page of the split point will give to the key0 of the new node
+      // allocate the second half of the old node to the new node evenly
+      new_page->IncreaseSize(1);
       new_page->SetKeyAt(idx, root->KeyAt(i));
       new_page->SetValueAt(idx, root->ValueAt(i));
       idx ++;
     }
     // shrink old node
-    root->IncreaseSize(-m/2);
+    root->IncreaseSize(-(idx));// remember that key0 is null
 
-    for (int i = 1; i <= new_page->GetSize(); i ++) {
-      if (i != new_page->GetSize() && comparator_(insert_key, new_page->KeyAt(i)) > 0) {
+    insert_page = std::move(root);
+    if (!insert_small_than_tmp_key) {
+      insert_page = std::move(new_page);
+    }
+
+    for (int i = 1; i <= insert_page->GetSize(); i ++) {
+      if (i != insert_page->GetSize() && comparator_(insert_key, insert_page->KeyAt(i)) > 0) {
         continue;
       }
       // insert into (i - 1)th position
-      new_page->IncreaseSize(1);
-      BUSTUB_ASSERT(new_page->GetSize() > 1, "new_page must have at least one element!");
-      for (int j = new_page->GetSize() - 1; j >= i + 1; j --) {
-        new_page->SetKeyAt(j, new_page->KeyAt(j - 1));
-        new_page->SetValueAt(j, new_page->ValueAt(j - 1));
+      insert_page->IncreaseSize(1);
+      BUSTUB_ASSERT(insert_page->GetSize() > 1, "insert_page must have at least one element!");
+      for (int j = insert_page->GetSize() - 1; j >= i + 1; j --) {
+        insert_page->SetKeyAt(j, insert_page->KeyAt(j - 1));
+        insert_page->SetValueAt(j, insert_page->ValueAt(j - 1));
       }
-      new_page->SetKeyAt(i, insert_key);
-      new_page->SetValueAt(i, insert_val);
+      insert_page->SetKeyAt(i, insert_key);
+      insert_page->SetValueAt(i, insert_val);
       break;
     }
 
@@ -336,45 +359,64 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     m = root->GetSize();
     BUSTUB_ASSERT(m > 0, "leaf size must bigger than zero!");
 
-    tmp_key = root->KeyAt((m + 1) / 2);
+    special = false;
+    middle = (m + 1) / 2;
+    tmp_key = root->KeyAt(middle);
+    insert_small_than_tmp_key = (comparator_(insert_key, tmp_key) < 0);
+    if (insert_small_than_tmp_key) {
+      middle = m / 2;
+      tmp_key = root->KeyAt(middle);
+      if (comparator_(insert_key, tmp_key) >= 0) {
+        special = true;
+        swap = insert_key;
+        insert_key = tmp_key;
+        tmp_key = swap;
+      }
+    }
 
+    // split to two nodes first
+    // create new node
     bpm_->NewPageGuarded(&page_id);
     new_page_guard = bpm_->FetchPageWrite(page_id);
     new_page = new_page_guard.AsMut<InternalPage>();
     new_page->Init(internal_max_size_);
-    // allocate the second half of the old node to the new node evenly
-    new_page->IncreaseSize(m / 2 - 1);  // remember that key0 is null
 
-    // skip tmp_key
-    if (comparator_(insert_key, root->KeyAt((m + 1) / 2)) >= 0)
-      new_page->SetValueAt(0, root->ValueAt((m + 1) / 2));
+    if (!special)
+      new_page->SetValueAt(0, root->ValueAt(middle));
     else {
-      insert_key = tmp_key;
       new_page->SetValueAt(0, insert_val);
-      insert_val = root->ValueAt((m + 1) / 2);
+      insert_val = root->ValueAt(middle);
     }
+
     idx = 1;
-    for (int i = (m + 1) / 2 + 1; i < m; i ++) { // the next page of the split point will give to the key0 of the new node
+    for (int i = middle + 1; i < m; i ++) { // the next page of the split point will give to the key0 of the new node
+      // allocate the second half of the old node to the new node evenly
+      new_page->IncreaseSize(1);
       new_page->SetKeyAt(idx, root->KeyAt(i));
       new_page->SetValueAt(idx, root->ValueAt(i));
       idx ++;
     }
     // shrink old node
-    root->IncreaseSize(-m/2);
+    root->IncreaseSize(-(idx));// remember that key0 is null
 
-    for (int i = 1; i <= new_page->GetSize(); i ++) {
-      if (i != new_page->GetSize() && comparator_(insert_key, new_page->KeyAt(i)) > 0) {
+    insert_page = std::move(root);
+    if (!insert_small_than_tmp_key) {
+      insert_page = std::move(new_page);
+    }
+
+    for (int i = 1; i <= insert_page->GetSize(); i ++) {
+      if (i != insert_page->GetSize() && comparator_(insert_key, insert_page->KeyAt(i)) > 0) {
         continue;
       }
       // insert into (i - 1)th position
-      new_page->IncreaseSize(1);
-      BUSTUB_ASSERT(new_page->GetSize() > 1, "new_page must have at least one element!");
-      for (int j = new_page->GetSize() - 1; j >= i + 1; j --) {
-        new_page->SetKeyAt(j, new_page->KeyAt(j - 1));
-        new_page->SetValueAt(j, new_page->ValueAt(j - 1));
+      insert_page->IncreaseSize(1);
+      BUSTUB_ASSERT(insert_page->GetSize() > 1, "insert_page must have at least one element!");
+      for (int j = insert_page->GetSize() - 1; j >= i + 1; j --) {
+        insert_page->SetKeyAt(j, insert_page->KeyAt(j - 1));
+        insert_page->SetValueAt(j, insert_page->ValueAt(j - 1));
       }
-      new_page->SetKeyAt(i, insert_key);
-      new_page->SetValueAt(i, insert_val);
+      insert_page->SetKeyAt(i, insert_key);
+      insert_page->SetValueAt(i, insert_val);
       break;
     }
 
