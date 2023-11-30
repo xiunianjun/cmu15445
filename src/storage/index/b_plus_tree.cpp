@@ -199,7 +199,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   WritePageGuard new_page_guard;
   InternalPage* new_page;
   InternalPage* insert_page;
-
+  
   // Though I think there must be a waiy to merge this case with the below while(),
   // I finally decide not to do a merging for a more clear code.
   if (leaf->GetSize() == leaf->GetMaxSize()) {
@@ -274,16 +274,6 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       goto INSERTION_END;
     }
 
-    if (ctx.write_set_.empty()) {
-      break;
-    }
-
-    // need to split
-    // get parent of the "root"
-    auto parent_guard = std::move(ctx.write_set_.back());
-    InternalPage* parent = parent_guard.AsMut<InternalPage>();
-    ctx.write_set_.pop_back();
-
     // split node
     m = root->GetSize();
     BUSTUB_ASSERT(m > 0, "leaf size must bigger than zero!");
@@ -305,7 +295,6 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
 
     // split to two nodes first
     // create new node
-    page_id_t page_id;
     bpm_->NewPageGuarded(&page_id);
     new_page_guard = bpm_->FetchPageWrite(page_id);
     new_page = new_page_guard.AsMut<InternalPage>();
@@ -319,7 +308,6 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     }
     idx = 1;
     for (int i = middle + 1; i < m; i ++) { // the next page of the split point will give to the key0 of the new node
-      // allocate the second half of the old node to the new node evenly
       new_page->IncreaseSize(1);
       new_page->SetKeyAt(idx, root->KeyAt(i));
       new_page->SetValueAt(idx, root->ValueAt(i));
@@ -348,6 +336,16 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       insert_page->SetValueAt(i, insert_val);
       break;
     }
+
+    if (ctx.write_set_.empty()) {
+      break;
+    }
+
+    // need to split
+    // get parent of the "root"
+    auto parent_guard = std::move(ctx.write_set_.back());
+    auto parent = parent_guard.AsMut<InternalPage>();
+    ctx.write_set_.pop_back();
 
     root = parent;
     guard = std::move(parent_guard);
@@ -355,72 +353,8 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     insert_val = page_id;
   }
 
-  if(root->GetSize() == root->GetMaxSize()) { // root should be splited
-    m = root->GetSize();
-    BUSTUB_ASSERT(m > 0, "leaf size must bigger than zero!");
-
-    special = false;
-    middle = (m + 1) / 2;
-    tmp_key = root->KeyAt(middle);
-    insert_small_than_tmp_key = (comparator_(insert_key, tmp_key) < 0);
-    if (insert_small_than_tmp_key) {
-      middle = m / 2;
-      tmp_key = root->KeyAt(middle);
-      if (comparator_(insert_key, tmp_key) >= 0) {
-        special = true;
-        swap = insert_key;
-        insert_key = tmp_key;
-        tmp_key = swap;
-      }
-    }
-
-    // split to two nodes first
-    // create new node
-    bpm_->NewPageGuarded(&page_id);
-    new_page_guard = bpm_->FetchPageWrite(page_id);
-    new_page = new_page_guard.AsMut<InternalPage>();
-    new_page->Init(internal_max_size_);
-
-    if (!special)
-      new_page->SetValueAt(0, root->ValueAt(middle));
-    else {
-      new_page->SetValueAt(0, insert_val);
-      insert_val = root->ValueAt(middle);
-    }
-
-    idx = 1;
-    for (int i = middle + 1; i < m; i ++) { // the next page of the split point will give to the key0 of the new node
-      // allocate the second half of the old node to the new node evenly
-      new_page->IncreaseSize(1);
-      new_page->SetKeyAt(idx, root->KeyAt(i));
-      new_page->SetValueAt(idx, root->ValueAt(i));
-      idx ++;
-    }
-    // shrink old node
-    root->IncreaseSize(-(idx));// remember that key0 is null
-
-    insert_page = std::move(root);
-    if (!insert_small_than_tmp_key) {
-      insert_page = std::move(new_page);
-    }
-
-    for (int i = 1; i <= insert_page->GetSize(); i ++) {
-      if (i != insert_page->GetSize() && comparator_(insert_key, insert_page->KeyAt(i)) > 0) {
-        continue;
-      }
-      // insert into (i - 1)th position
-      insert_page->IncreaseSize(1);
-      BUSTUB_ASSERT(insert_page->GetSize() > 1, "insert_page must have at least one element!");
-      for (int j = insert_page->GetSize() - 1; j >= i + 1; j --) {
-        insert_page->SetKeyAt(j, insert_page->KeyAt(j - 1));
-        insert_page->SetValueAt(j, insert_page->ValueAt(j - 1));
-      }
-      insert_page->SetKeyAt(i, insert_key);
-      insert_page->SetValueAt(i, insert_val);
-      break;
-    }
-
 ROOT_SPLIT:
+  {
     // create and init new root
     page_id_t new_root_page_id;
     bpm_->NewPageGuarded(&new_root_page_id);
@@ -440,7 +374,7 @@ ROOT_SPLIT:
     new_root->SetKeyAt(1, tmp_key);
     new_root->SetValueAt(1, page_id);
   }
-
+  
 INSERTION_END:
   // insert the target
   BUSTUB_ASSERT(leaf->IsLeafPage(), "leaf should be a leaf page!");
