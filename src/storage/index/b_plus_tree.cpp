@@ -103,14 +103,6 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
  * @return: since we only support unique key, if user try to insert duplicate
  * keys return false, otherwise return true.
  */
-/* 
- * my algorithm: 
- * 1. for split
- * The connections of old node have no need to change, just add a new connection 
- * between the new node and the parent node.
- * 2. for insert
- * The new key-value is always inserted into the new node.
- */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transaction *txn) -> bool {
   // Declaration of context instance.
@@ -146,7 +138,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   InternalPage* root = guard.AsMut<InternalPage>();
   ctx.write_set_.push_back(std::move(guard)); 
   
-  // get target leaf node
+  /* step1 get target leaf node */
   while (true) {
     if (root->IsLeafPage()) {
       break;
@@ -184,22 +176,16 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     }
   }
 
-  // need to be splited
   bool should_split = (leaf->GetSize() == leaf->GetMaxSize());
-  KeyType tmp_key;
-  page_id_t page_id;
-  int m;
-  int middle;
-  bool insert_small_than_tmp_key;
-  bool special = false;
-  KeyType insert_key;
-  KeyType swap;
-  page_id_t insert_val;
-  int idx;
+  bool insert_small_than_tmp_key, special;
+  int m, middle, idx;
+  KeyType tmp_key, insert_key, swap;
+  page_id_t page_id, insert_val;
   WritePageGuard new_page_guard;
   InternalPage* new_page;
   InternalPage* insert_page;
   
+  /* step2 split the target leaf node */
   // Though I think there must be a waiy to merge this case with the below while(),
   // I finally decide not to do a merging for a more clear code.
   if (leaf->GetSize() == leaf->GetMaxSize()) {
@@ -408,11 +394,179 @@ INSERTION_END:
  * delete entry from leaf page. Remember to deal with redistribute or merge if
  * necessary.
  */
+/*
+感觉删除算法应该会比插入简单点。
+如果删完了发现小于min size，那就以如下策略执行：
+1. 如果右边+current > max_size，那就从右边借一个最小的过来，更新右边父节点的key；【总是只需做更新操作】
+2. 如果右边+current <= max_size，那就合并右边到本节点，删了右边父节点的key；【过程中两个操作都可能做】
+然后一路向上调整，（指如果出现自己的key，更新为指向子结点的第一个元素；如果没有子节点，删除key）直到没出现自己的key为止。
+感觉1比2简单，先分开实现吧。
+*/
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   // Declaration of context instance.
   Context ctx;
-  (void)ctx;
+  // get write page of root
+  ctx.header_page_ = std::move(bpm_->FetchPageWrite(header_page_id_));
+  // get root page id
+  auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
+  ctx.root_page_id_ = header_page->root_page_id_;
+  int leaf_position = 0;
+
+  // b+ tree is empty
+  if (ctx.root_page_id_ == INVALID_PAGE_ID) {
+    return ;
+  }
+
+  BUSTUB_ASSERT(ctx.root_page_id_ != INVALID_PAGE_ID, "root page id should be valid.");
+
+  // get root page
+  auto guard = bpm_->FetchPageWrite(ctx.root_page_id_);
+  InternalPage* root = guard.AsMut<InternalPage>();
+  ctx.write_set_.push_back(std::move(guard)); 
+  
+  /* step1 get target leaf node */
+  while (true) {
+    if (root->IsLeafPage()) {
+      break;
+    }
+    bool flag = false;
+    int i;
+    for (i = 1; i < root->GetSize(); i ++) { // for internal page, traverse the key map begin with 1
+      if (comparator_(key, root->KeyAt(i)) < 0) { // if target < current key, target is in the lefthand of key
+        guard = std::move(bpm_->FetchPageWrite(root->ValueAt(i - 1)));
+        root = guard.AsMut<InternalPage>(); // goto left child
+        ctx.write_set_.push_back(std::move(guard));
+        flag = true;
+        break;
+      }
+    }
+    if (!flag) {
+      guard = std::move(bpm_->FetchPageWrite(root->ValueAt(root->GetSize() - 1)));
+      root = guard.AsMut<InternalPage>(); // goto most right child
+      ctx.write_set_.push_back(std::move(guard));
+    }
+    leaf_position = i - 1;
+  }
+
+  auto leaf_guard = std::move(ctx.write_set_.back());
+  auto leaf = leaf_guard.AsMut<LeafPage>();
+  if (!(ctx.write_set_.empty())) {
+    ctx.write_set_.pop_back();  // the target leaf was pushed to ctx above
+  }
+
+  // check is here first
+  for (int i = 0; i < leaf->GetSize(); i ++) { // for leaf page, traverse the key map begin with 0
+    if (comparator_(key, leaf->KeyAt(i)) == 0) { // related key is here
+      // delete key
+      for (int j = i + 1; j < leaf->GetSize(); j ++) {
+        leaf->SetKeyAt(j - 1, leaf->KeyAt(j));
+        leaf->SetValueAt(j - 1, leaf->ValueAt(j));
+      }
+      leaf->IncreaseSize(-1);
+      break;
+    }
+  }
+
+  if (leaf->GetSize() >= leaf->GetMinSize())  return ;
+
+  // TODO: 还没实现leaf为最后一个的case
+  /*
+  感觉得是这样：
+  首先得知道自己在父节点中的位置[leaf_position]。然后先尝试对左右中size最大的借，
+  如果都不行再选择左右中最小的合。
+  1. 借左边
+  只需更新自己的key即可
+  2. 借右边
+  只需更新自己和右边的key即可
+  3. 合左边
+  删除左边的key，更新自己的key
+  4. 合右边
+  删除右边的key，更新自己的key
+  */
+
+  // get parent
+  auto parent_guard = std::move(ctx.write_set_.back());
+  auto parent = parent_guard.AsMut<InternalPage>();
+  ctx.write_set_.pop_back();
+
+  WritePageGuard next_guard, prev_guard;
+  LeafPage* next_leaf_page = nullptr;
+  LeafPage* prev_leaf_page = nullptr;
+  int bigger_size = 0;
+  if (leaf_position == parent->GetSize() - 1) {
+    // rightest, has no next
+    prev_guard = bpm_->FetchPageWrite(parent->ValueAt(leaf_position - 1));
+    prev_leaf_page = prev_guard.AsMut<LeafPage>();
+    bigger_size = prev_leaf_page->GetSize();
+  } else if (leaf_position == 0) {
+    // leftest, has no prev
+    next_guard = bpm_->FetchPageWrite(parent->ValueAt(leaf_position + 1));
+    next_leaf_page = next_guard.AsMut<LeafPage>();
+    bigger_size = next_leaf_page->GetSize();
+  } else {
+    prev_guard = bpm_->FetchPageWrite(parent->ValueAt(leaf_position - 1));
+    prev_leaf_page = prev_guard.AsMut<LeafPage>();
+    next_guard = bpm_->FetchPageWrite(parent->ValueAt(leaf_position + 1));
+    next_leaf_page = next_guard.AsMut<LeafPage>();
+  }
+
+  BUSTUB_ASSERT(next_leaf_page != nullptr || prev_leaf_page != nullptr, "must have at least one company.");
+  if (bigger_size == 0)
+    bigger_size= std::max(next_leaf_page->GetSize(), prev_leaf_page->GetSize());
+  if (bigger_size - 1 < leaf->GetMinSize()) {
+    goto MERGE_NODE;
+  }
+  
+  // should not merge, just steal an element from bigger leaf and update the parent node.
+
+  leaf->IncreaseSize(1);
+  if (next_leaf_page == nullptr || (prev_leaf_page != nullptr && next_leaf_page->GetSize() <= prev_leaf_page->GetSize())) {
+    // steal one element from prev
+    for (int j = 1; j < leaf->GetSize(); j ++) {
+      leaf->SetKeyAt(j, leaf->KeyAt(j - 1));
+      leaf->SetValueAt(j, leaf->ValueAt(j - 1));
+    }
+    leaf->SetKeyAt(0, prev_leaf_page->KeyAt(prev_leaf_page->GetSize() - 1));
+    leaf->SetValueAt(0, prev_leaf_page->ValueAt(prev_leaf_page->GetSize() - 1));
+    prev_leaf_page->IncreaseSize(-1);
+  } else {
+    // steal one element from next
+    leaf->SetKeyAt(leaf->GetSize() - 1, next_leaf_page->KeyAt(0));
+    leaf->SetValueAt(leaf->GetSize() - 1, next_leaf_page->ValueAt(0));
+    for (int j = 1; j < next_leaf_page->GetSize(); j ++) {
+      next_leaf_page->SetKeyAt(j - 1, next_leaf_page->KeyAt(j));
+      next_leaf_page->SetValueAt(j - 1, next_leaf_page->ValueAt(j));
+    }
+    next_leaf_page->IncreaseSize(-1);
+
+    // update next key
+    parent->SetKeyAt(leaf_position + 1, next_leaf_page->KeyAt(0));
+  }
+  if (leaf_position > 0)
+    parent->SetKeyAt(leaf_position, leaf->KeyAt(0));
+
+  // update parent
+  while(!ctx.write_set_.empty()) {
+    // get parent
+    parent_guard = std::move(ctx.write_set_.back());
+    parent = parent_guard.AsMut<InternalPage>();
+    ctx.write_set_.pop_back();
+
+    for (int i = 1; i < parent->GetSize(); i ++) {
+      if (comparator_(parent->KeyAt(i), key) == 0) {
+        auto tmp_guard = bpm_->FetchPageRead(parent->ValueAt(i));
+        auto tmp_page = tmp_guard.template As<InternalPage>();
+        parent->SetKeyAt(i, tmp_page->KeyAt(1));
+      }
+    }
+  }
+
+  ctx.write_set_.clear();
+  ctx.header_page_ = std::nullopt;
+  return ;
+MERGE_NODE:
+  printf("end\n");
 }
 
 /*****************************************************************************
