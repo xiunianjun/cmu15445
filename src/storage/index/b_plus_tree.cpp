@@ -394,14 +394,6 @@ INSERTION_END:
  * delete entry from leaf page. Remember to deal with redistribute or merge if
  * necessary.
  */
-/*
-感觉删除算法应该会比插入简单点。
-如果删完了发现小于min size，那就以如下策略执行：
-1. 如果右边+current > max_size，那就从右边借一个最小的过来，更新右边父节点的key；【总是只需做更新操作】
-2. 如果右边+current <= max_size，那就合并右边到本节点，删了右边父节点的key；【过程中两个操作都可能做】
-然后一路向上调整，（指如果出现自己的key，更新为指向子结点的第一个元素；如果没有子节点，删除key）直到没出现自己的key为止。
-感觉1比2简单，先分开实现吧。
-*/
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   // Declaration of context instance.
@@ -411,7 +403,6 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   // get root page id
   auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
   ctx.root_page_id_ = header_page->root_page_id_;
-  int leaf_position = 0;
 
   // b+ tree is empty
   if (ctx.root_page_id_ == INVALID_PAGE_ID) {
@@ -446,7 +437,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
       root = guard.AsMut<InternalPage>(); // goto most right child
       ctx.write_set_.push_back(std::move(guard));
     }
-    leaf_position = i - 1;
+    ctx.position_set_.push_back(i - 1);
   }
 
   auto leaf_guard = std::move(ctx.write_set_.back());
@@ -455,7 +446,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
     ctx.write_set_.pop_back();  // the target leaf was pushed to ctx above
   }
 
-  // check is here first
+  // delete key
   for (int i = 0; i < leaf->GetSize(); i ++) { // for leaf page, traverse the key map begin with 0
     if (comparator_(key, leaf->KeyAt(i)) == 0) { // related key is here
       // delete key
@@ -469,51 +460,66 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   }
 
   if (leaf->GetSize() >= leaf->GetMinSize())  return ;
-
-  // TODO: 还没实现leaf为最后一个的case
-  /*
-  感觉得是这样：
-  首先得知道自己在父节点中的位置[leaf_position]。然后先尝试对左右中size最大的借，
-  如果都不行再选择左右中最小的合。
-  1. 借左边
-  只需更新自己的key即可
-  2. 借右边
-  只需更新自己和右边的key即可
-  3. 合左边
-  删除左边的key，更新自己的key
-  4. 合右边
-  删除右边的key，更新自己的key
+  if (ctx.write_set_.empty()) {
+    if (leaf->GetSize() > 0)  return ;
+    // switch to an empty tree
+    auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
+    header_page->root_page_id_ = INVALID_PAGE_ID;
+    ctx.root_page_id_ = INVALID_PAGE_ID;
+    return ;
+  }
+  
+  /* 
+    Should do a merge or a steal. 
+    If do a merge, we should delete related key in the parent, and merge up till
+    reaching the root;
+    If do a steal, we should update related key in the parent, and update up till
+    reaching the root.
   */
 
+  /*
+    For that steal is more simple, we first check whether it can do a steal first.
+    We steal the node whose size is biggest between the next and the prev node.
+    If the prev size is bigger, we only update self key in parent.
+    If the next size is bigger, we update both self key and next key n parent.
+    After that, we trace back and update all the parent nodes which contains the 
+    target key.
+  */
   // get parent
   auto parent_guard = std::move(ctx.write_set_.back());
   auto parent = parent_guard.AsMut<InternalPage>();
   ctx.write_set_.pop_back();
+  auto root_guard = std::move(parent_guard);
+  root = root_guard.AsMut<InternalPage>();
 
   WritePageGuard next_guard, prev_guard;
   LeafPage* next_leaf_page = nullptr;
   LeafPage* prev_leaf_page = nullptr;
+  int leaf_position = ctx.position_set_.back();
+  ctx.position_set_.pop_back();
+  int internal_position = 0;
+  KeyType update_key;
+
   int bigger_size = 0;
-  if (leaf_position == parent->GetSize() - 1) {
+  if (leaf_position == root->GetSize() - 1) {
     // rightest, has no next
-    prev_guard = bpm_->FetchPageWrite(parent->ValueAt(leaf_position - 1));
+    prev_guard = bpm_->FetchPageWrite(root->ValueAt(leaf_position - 1));
     prev_leaf_page = prev_guard.AsMut<LeafPage>();
     bigger_size = prev_leaf_page->GetSize();
   } else if (leaf_position == 0) {
     // leftest, has no prev
-    next_guard = bpm_->FetchPageWrite(parent->ValueAt(leaf_position + 1));
+    next_guard = bpm_->FetchPageWrite(root->ValueAt(leaf_position + 1));
     next_leaf_page = next_guard.AsMut<LeafPage>();
     bigger_size = next_leaf_page->GetSize();
   } else {
-    prev_guard = bpm_->FetchPageWrite(parent->ValueAt(leaf_position - 1));
+    prev_guard = bpm_->FetchPageWrite(root->ValueAt(leaf_position - 1));
     prev_leaf_page = prev_guard.AsMut<LeafPage>();
-    next_guard = bpm_->FetchPageWrite(parent->ValueAt(leaf_position + 1));
+    next_guard = bpm_->FetchPageWrite(root->ValueAt(leaf_position + 1));
     next_leaf_page = next_guard.AsMut<LeafPage>();
+    bigger_size= std::max(next_leaf_page->GetSize(), prev_leaf_page->GetSize());
   }
 
   BUSTUB_ASSERT(next_leaf_page != nullptr || prev_leaf_page != nullptr, "must have at least one company.");
-  if (bigger_size == 0)
-    bigger_size= std::max(next_leaf_page->GetSize(), prev_leaf_page->GetSize());
   if (bigger_size - 1 < leaf->GetMinSize()) {
     goto MERGE_NODE;
   }
@@ -541,10 +547,12 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
     next_leaf_page->IncreaseSize(-1);
 
     // update next key
-    parent->SetKeyAt(leaf_position + 1, next_leaf_page->KeyAt(0));
+    root->SetKeyAt(leaf_position + 1, next_leaf_page->KeyAt(0));
   }
   if (leaf_position > 0)
-    parent->SetKeyAt(leaf_position, leaf->KeyAt(0));
+    root->SetKeyAt(leaf_position, leaf->KeyAt(0));
+
+  update_key = leaf->KeyAt(0);
 
   // update parent
   while(!ctx.write_set_.empty()) {
@@ -552,21 +560,217 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
     parent_guard = std::move(ctx.write_set_.back());
     parent = parent_guard.AsMut<InternalPage>();
     ctx.write_set_.pop_back();
+    internal_position = ctx.position_set_.back();
+    ctx.position_set_.pop_back();
 
-    for (int i = 1; i < parent->GetSize(); i ++) {
-      if (comparator_(parent->KeyAt(i), key) == 0) {
-        auto tmp_guard = bpm_->FetchPageRead(parent->ValueAt(i));
-        auto tmp_page = tmp_guard.template As<InternalPage>();
-        parent->SetKeyAt(i, tmp_page->KeyAt(1));
-      }
+    if (comparator_(parent->KeyAt(internal_position), key) == 0) {
+      auto tmp_guard = bpm_->FetchPageRead(parent->ValueAt(internal_position));
+      parent->SetKeyAt(internal_position, update_key);
     }
   }
 
   ctx.write_set_.clear();
   ctx.header_page_ = std::nullopt;
   return ;
+
 MERGE_NODE:
-  printf("end\n");
+  /* 
+    Need to merge with one of the node. It is more simple to try to merge the left node 
+    first. So the strategy:
+    1. Pick the prev node to merge. (If leaf is most left, pick next node)
+    2. Update delete-key. (for prev, it's leaf[0]; for next, it's right key, and need 
+      to update self)
+    3. Go up till reaching root. Do:
+      1. delete delete-key.
+      2. pick merging or stealing like above.
+        1. if merge, update delete-key, go up;
+        2. if steal, break to do update and has no need to go up.
+    4. Remember to deal with edge case: root.
+  */
+  WritePageGuard merge_to_guard, merge_from_guard;
+  LeafPage* merge_to_page;
+  LeafPage* merge_from_page;
+  KeyType delete_key;
+
+  if (leaf_position != 0) {
+    merge_to_guard = std::move(prev_guard);
+    merge_from_guard = std::move(leaf_guard);
+    delete_key = root->KeyAt(leaf_position);
+  } else {
+    merge_to_guard = std::move(leaf_guard);
+    merge_from_guard = std::move(next_guard);
+    delete_key = root->KeyAt(leaf_position + 1);
+  }
+  merge_to_page = merge_to_guard.AsMut<LeafPage>();
+  merge_from_page = merge_from_guard.AsMut<LeafPage>();
+
+  int idx = merge_to_page->GetSize();
+
+  for (int i = 0; i < merge_from_page->GetSize(); i ++) {
+    merge_to_page->IncreaseSize(1);
+    merge_to_page->SetKeyAt(idx, merge_from_page->KeyAt(i));
+    merge_to_page->SetValueAt(idx, merge_from_page->ValueAt(i));
+    idx ++;
+  }
+
+  update_key = merge_to_page->KeyAt(0);
+  merge_to_page->SetNextPageId(merge_from_page->GetNextPageId());
+
+  merge_from_page->IncreaseSize(merge_from_page->GetSize());
+  merge_to_guard.Drop();
+  merge_from_guard.Drop();
+
+  while(true) {
+    // delete key
+    bool is_find = false;
+    for (int i = 1; i < root->GetSize(); i ++) { // for leaf page, traverse the key map begin with 0
+      if (comparator_(delete_key, root->KeyAt(i)) == 0) { // related key is here
+        // delete key
+        for (int j = i + 1; j < root->GetSize(); j ++) {
+          root->SetKeyAt(j - 1, root->KeyAt(j));
+          root->SetValueAt(j - 1, root->ValueAt(j));
+        }
+        root->IncreaseSize(-1);
+        is_find = true;
+        break;
+      }
+    }
+    BUSTUB_ASSERT(is_find, "deleted key must be in [1, size - 1].");
+
+    if (ctx.write_set_.empty()) {
+      if (root->GetSize() == 1) {
+        // change root!
+        auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
+        header_page->root_page_id_ = root->ValueAt(0);
+        ctx.root_page_id_ = root->ValueAt(0);
+      }
+      break;
+    }
+
+    parent_guard = std::move(ctx.write_set_.back());
+    parent = parent_guard.AsMut<InternalPage>();
+    ctx.write_set_.pop_back();
+    internal_position = ctx.position_set_.back();
+    ctx.position_set_.pop_back();
+
+    InternalPage* next_internal_page = nullptr;
+    InternalPage* prev_internal_page = nullptr;
+
+    int bigger_size = 0;
+    if (internal_position == parent->GetSize() - 1) {
+      // rightest, has no next
+      prev_guard = bpm_->FetchPageWrite(parent->ValueAt(internal_position - 1));
+      prev_internal_page = prev_guard.AsMut<InternalPage>();
+      bigger_size = prev_internal_page->GetSize();
+    } else if (internal_position == 0) {
+      // leftest, has no prev
+      next_guard = bpm_->FetchPageWrite(parent->ValueAt(internal_position + 1));
+      next_internal_page = next_guard.AsMut<InternalPage>();
+      bigger_size = next_internal_page->GetSize();
+    } else {
+      prev_guard = bpm_->FetchPageWrite(parent->ValueAt(internal_position - 1));
+      prev_internal_page = prev_guard.AsMut<InternalPage>();
+      next_guard = bpm_->FetchPageWrite(parent->ValueAt(internal_position + 1));
+      next_internal_page = next_guard.AsMut<InternalPage>();
+      bigger_size= std::max(next_internal_page->GetSize(), prev_internal_page->GetSize());
+    }
+
+    BUSTUB_ASSERT(next_internal_page != nullptr || prev_internal_page != nullptr, "must have at least one company.");
+    
+    if (bigger_size - 1 < root->GetMinSize()) {
+      // merge!
+      InternalPage* merge_to_page;
+      InternalPage* merge_from_page;
+
+      if (internal_position != 0) {
+        merge_to_guard = std::move(prev_guard);
+        merge_from_guard = std::move(root_guard);
+        delete_key = parent->KeyAt(internal_position);
+      } else {
+        merge_to_guard = std::move(root_guard);
+        merge_from_guard = std::move(next_guard);
+        delete_key = parent->KeyAt(internal_position + 1);
+      }
+      merge_to_page = merge_to_guard.AsMut<InternalPage>();
+      merge_from_page = merge_from_guard.AsMut<InternalPage>();
+
+      int idx = merge_to_page->GetSize();
+      merge_to_page->IncreaseSize(1);
+      merge_to_page->SetKeyAt(idx, delete_key);
+      merge_to_page->SetValueAt(idx, merge_from_page->ValueAt(0));
+      idx ++;
+
+      for (int i = 1; i < merge_from_page->GetSize(); i ++) {
+        merge_to_page->IncreaseSize(1);
+        merge_to_page->SetKeyAt(idx, merge_from_page->KeyAt(i));
+        merge_to_page->SetValueAt(idx, merge_from_page->ValueAt(i));
+        idx ++;
+      }
+
+      merge_from_page->IncreaseSize(merge_from_page->GetSize());
+      merge_to_guard.Drop();
+      merge_from_guard.Drop();
+
+      root_guard = std::move(parent_guard);
+      root = root_guard.AsMut<InternalPage>();
+      continue;
+    }
+    
+    // should not merge, just steal an element from bigger leaf and update the parent node.
+    // This case doesn't need to update up the new key of the prev or the next node, 
+    // because it just update the second key or after of the parent node, and won't 
+    // affect the grandparent.
+    if (next_internal_page == nullptr || (prev_internal_page != nullptr && next_internal_page->GetSize() <= prev_internal_page->GetSize())) {
+      // steal one element from prev
+      if (comparator_(delete_key, parent->KeyAt(internal_position)) == 0) // TODO
+        BUSTUB_ASSERT(false, "the deleted key has no chance to be in position 0.");
+      
+      root->IncreaseSize(1);
+      for (int j = 2; j < root->GetSize(); j ++) {
+        root->SetKeyAt(j, root->KeyAt(j - 1));
+        root->SetValueAt(j, root->ValueAt(j - 1));
+      }
+      root->SetKeyAt(1, parent->KeyAt(internal_position));
+      root->SetValueAt(1, root->ValueAt(0));
+      root->SetValueAt(0, prev_internal_page->ValueAt(prev_internal_page->GetSize() - 1));
+      parent->SetKeyAt(internal_position, prev_internal_page->KeyAt(prev_internal_page->GetSize() - 1));
+      prev_internal_page->IncreaseSize(-1);
+    } else {
+      // steal one element from next
+      root->IncreaseSize(1);
+      root->SetKeyAt(root->GetSize() - 1, parent->KeyAt(internal_position + 1));
+      root->SetValueAt(root->GetSize() - 1, next_internal_page->ValueAt(0));
+      next_internal_page->SetValueAt(0, next_internal_page->ValueAt(1));
+      parent->SetKeyAt(internal_position + 1, next_internal_page->KeyAt(1));
+      for (int j = 2; j < next_internal_page->GetSize(); j ++) {
+        next_internal_page->SetKeyAt(j - 1, next_internal_page->KeyAt(j));
+        next_internal_page->SetValueAt(j - 1, next_internal_page->ValueAt(j));
+      }
+      next_internal_page->IncreaseSize(-1);
+    }
+
+    // update parent
+    while(!ctx.write_set_.empty()) {
+      // get parent
+      parent_guard = std::move(ctx.write_set_.back());
+      parent = parent_guard.AsMut<InternalPage>();
+      ctx.write_set_.pop_back();
+      internal_position = ctx.position_set_.back();
+      ctx.position_set_.pop_back();
+
+      if (comparator_(parent->KeyAt(internal_position), key) == 0) {
+        auto tmp_guard = bpm_->FetchPageRead(parent->ValueAt(internal_position));
+        parent->SetKeyAt(internal_position, update_key);
+      }
+    }
+
+    break;
+  }
+
+  ctx.write_set_.clear();
+  ctx.header_page_ = std::nullopt;
+  
+  return ;
 }
 
 /*****************************************************************************

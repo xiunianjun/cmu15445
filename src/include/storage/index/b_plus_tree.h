@@ -50,6 +50,8 @@ class Context {
   // Store the write guards of the pages that you're modifying here.
   std::deque<WritePageGuard> write_set_;
 
+  std::deque<int> position_set_;
+
   // You may want to use this when getting value, but not necessary.
   std::deque<ReadPageGuard> read_set_;
 
