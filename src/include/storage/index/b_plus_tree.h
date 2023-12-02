@@ -67,6 +67,13 @@ class BPlusTree {
   using LeafPage = BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>;
 
  private:
+  /**
+   * @brief Return the index of key. If no exists, return the upper bound.
+   */
+  int BinarySearchLeaf(const LeafPage* leaf, int begin, int end, const KeyType& key);
+  
+  int BinarySearchInternal(const InternalPage* internal, int begin, int end, const KeyType& key);
+
   /* Debug Routines for FREE!! */
   void ToGraph(page_id_t page_id, const BPlusTreePage *page, std::ofstream &out);
 
