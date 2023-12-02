@@ -46,30 +46,43 @@ auto BPLUSTREE_TYPE::IsEmpty() const -> bool {
 /*****************************************************************************
  * SEARCH
  *****************************************************************************/
+/**
+ * Return the index of key. If no exists, return the upper bound.
+ */
 INDEX_TEMPLATE_ARGUMENTS
 int BPLUSTREE_TYPE::BinarySearchLeaf(const LeafPage* leaf, int begin, int end, const KeyType& key) {
   BUSTUB_ASSERT(leaf->IsLeafPage(), "leaf should be a leaf page!");
-  for (int i = begin; i <= end; i ++) { // for leaf page, traverse the key map begin with 0
-    if (i != end && comparator_(key, leaf->KeyAt(i)) > 0) {
-      continue;
+
+  int middle = (begin + end) / 2;
+  while (begin < end) {
+    if (comparator_(key, leaf->KeyAt(middle)) > 0) {
+      begin = middle + 1;
+    } else if (comparator_(key, leaf->KeyAt(middle)) < 0){
+      end = middle;
+    } else {
+      return middle;
     }
-    return i;
+    middle = (begin + end) / 2;
   }
 
-  return -1;
+  return middle;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 int BPLUSTREE_TYPE::BinarySearchInternal(const InternalPage* internal, int begin, int end, const KeyType& key) {
   BUSTUB_ASSERT(!(internal->IsLeafPage()), "internal should not be a leaf page!");
-  for (int i = begin; i <= end; i ++) { // for internal page, traverse the key map begin with 1
-    if (i != end && comparator_(key, internal->KeyAt(i)) >= 0) {
-      continue;
+
+  int middle = (begin + end) / 2;
+  while (begin < end) {
+    if (comparator_(key, internal->KeyAt(middle)) >= 0) {
+      begin = middle + 1;
+    } else {
+      end = middle;
     }
-    return i;
+    middle = (begin + end) / 2;
   }
 
-  BUSTUB_ASSERT(false, "unreachable");
+  return middle;
 }
 
 /*
