@@ -69,11 +69,10 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
     replacer_->RecordAccess(fid);
     replacer_->SetEvictable(fid, false);
 
-    pages_latch_[fid].lock();
-
     if (pages_[fid].IsDirty()) {  // write origin back
       disk_manager_->WritePage(pages_[fid].GetPageId(), pages_[fid].GetData());
     }
+    pages_latch_[fid].lock();
     latch_.unlock();
 
     Page *res = &(pages_[fid]);
@@ -90,10 +89,10 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   free_list_.pop_front();
   *page_id = AllocatePage();
 
-  pages_latch_[fid].lock();
   page_table_.insert(std::make_pair(*page_id, fid));
-  latch_.unlock();
 
+  pages_latch_[fid].lock();
+  latch_.unlock();
   replacer_->RecordAccess(fid);
   replacer_->SetEvictable(fid, false);
 
@@ -159,12 +158,11 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
     replacer_->RecordAccess(fid, access_type);
     replacer_->SetEvictable(fid, false);
 
-    pages_latch_[fid].lock();
-
     if (pages_[fid].IsDirty()) {
       disk_manager_->WritePage(pages_[fid].GetPageId(), pages_[fid].GetData());
     }
 
+    pages_latch_[fid].lock();
     Page *res = &(pages_[fid]);
     res->ResetMemory();
     // read from disk
@@ -180,13 +178,13 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
   }
   frame_id_t fid = free_list_.front();
   free_list_.pop_front();
-  pages_latch_[fid].lock();
   page_table_.insert(std::make_pair(page_id, fid));
 
   replacer_->RecordAccess(fid, access_type);
 
   replacer_->SetEvictable(fid, false);
 
+  pages_latch_[fid].lock();
   Page *res = &(pages_[fid]);
 
   res->page_id_ = page_id;
@@ -300,6 +298,10 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
   }
 
   frame_id_t fid = it->second;
+  page_table_.erase(it);
+  free_list_.push_back(fid);
+  replacer_->SetEvictable(fid, true);
+
   pages_latch_[fid].lock();
 
   if (pages_[fid].GetPinCount() != 0) {
@@ -308,11 +310,6 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
     return false;
   }
 
-  page_table_.erase(it);
-  free_list_.push_back(fid);
-  replacer_->SetEvictable(fid, true);
-  // latch_.unlock();
-  // latch_.lock_shared();
   if (pages_[fid].IsDirty()) {
     disk_manager_->WritePage(page_id, pages_[fid].GetData());
   }
@@ -326,7 +323,6 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
   DeallocatePage(page_id);
 
   latch_.unlock();
-  // latch_.unlock_shared();
   return true;
 }
 
