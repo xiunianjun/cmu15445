@@ -72,7 +72,7 @@ class BPlusTree {
    */
   auto BinarySearchLeaf(const LeafPage *leaf, int begin, int end, const KeyType &key) -> int;
 
-  auto BinarySearchInternal(const InternalPage *internal, int begin, int end, const KeyType &key) -> int;
+  auto BinarySearchInternal(const InternalPage *internal, int begin, int end, const KeyType &key, bool upper) -> int;
 
   /* Debug Routines for FREE!! */
   void ToGraph(page_id_t page_id, const BPlusTreePage *page, std::ofstream &out);
