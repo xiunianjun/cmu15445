@@ -134,15 +134,12 @@ INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transaction *txn) -> bool {
   // Declaration of context instance.
   Context ctx;
-  ReadPageGuard header_page_guard = bpm_->FetchPageRead(header_page_id_);
-  auto header_page = header_page_guard.As<BPlusTreeHeaderPage>();
+  ctx.header_page_ = bpm_->FetchPageWrite(header_page_id_);
+  auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
   ctx.root_page_id_ = header_page->root_page_id_;
 
   // b+ tree is empty
   if (ctx.root_page_id_ == INVALID_PAGE_ID) {
-    header_page_guard.Drop();
-    auto header_page_guard_write = bpm_->FetchPageWrite(header_page_id_);
-    auto header_page = header_page_guard_write.AsMut<BPlusTreeHeaderPage>();
     bpm_->NewPageGuarded(&(ctx.root_page_id_));
     header_page->root_page_id_ = ctx.root_page_id_;
 
@@ -161,73 +158,36 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   BUSTUB_ASSERT(ctx.root_page_id_ != INVALID_PAGE_ID, "root page id should be valid.");
 
   // get root page
-  ReadPageGuard root_read_guard = bpm_->FetchPageRead(ctx.root_page_id_);
-  ctx.read_set_.push_back(std::move(root_read_guard));
-  auto root_read_page = ctx.read_set_.back().As<InternalPage>();
-
-  WritePageGuard root_write_guard;
-  InternalPage *root_write_page = nullptr;
+  WritePageGuard root_write_guard = bpm_->FetchPageWrite(ctx.root_page_id_);
+  ctx.write_set_.push_back(std::move(root_write_guard));
+  auto root_write_page = ctx.write_set_.back().AsMut<InternalPage>();
 
   int index = -1;
 
   /* step1 get target leaf node */
   while (true) {
-    if (root_read_page->IsLeafPage()) {
+    if (root_write_page->IsLeafPage()) {
       break;
     }
 
-    BUSTUB_ASSERT(root_read_page->GetSize() > 0, "must have at least one node");
+    BUSTUB_ASSERT(root_write_page->GetSize() > 0, "must have at least one node");
 
-    index = BinarySearchInternal(root_read_page, 1, root_read_page->GetSize(), key);
-    root_read_guard = std::move(bpm_->FetchPageRead(root_read_page->ValueAt(index - 1)));
-    ctx.read_set_.push_back(std::move(root_read_guard));
-    root_read_page = ctx.read_set_.back().As<InternalPage>();  // goto most right child
+    index = BinarySearchInternal(root_write_page, 1, root_write_page->GetSize(), key);
+    root_write_guard = std::move(bpm_->FetchPageWrite(root_write_page->ValueAt(index - 1)));
+    ctx.write_set_.push_back(std::move(root_write_guard));
+    root_write_page = ctx.write_set_.back().AsMut<InternalPage>();  // goto most right child
   }
 
-  BUSTUB_ASSERT(!(ctx.read_set_.empty()), "have at least one node");
+  BUSTUB_ASSERT(!(ctx.write_set_.empty()), "have at least one node");
 
-  page_id_t leaf_page_id = ctx.read_set_.back().PageId();
-  ctx.read_set_.back().Drop();
-  ctx.read_set_.pop_back();  // the target leaf was pushed to ctx above
-
-  auto leaf_write_guard = bpm_->FetchPageWrite(leaf_page_id);
+  auto leaf_write_guard = std::move(ctx.write_set_.back());
+  ctx.write_set_.pop_back();  // the target leaf was pushed to ctx above
   auto leaf_write_page = leaf_write_guard.AsMut<LeafPage>();
 
   bool should_split = (leaf_write_page->GetSize() == leaf_write_page->GetMaxSize());
   if (!should_split) {
     ctx.header_page_ = std::nullopt;
-    ctx.read_set_.clear();
-    header_page_guard.Drop();
-  } else {
-    leaf_write_guard.Drop();
-    ctx.read_set_.clear();
-
-    WritePageGuard root_write_guard = bpm_->FetchPageWrite(ctx.root_page_id_);
-    ctx.write_set_.push_back(std::move(root_write_guard));
-    InternalPage *root_write_page = ctx.write_set_.back().AsMut<InternalPage>();
-    while (true) {
-      if (root_write_page->IsLeafPage()) {
-        break;
-      }
-
-      BUSTUB_ASSERT(root_write_page->GetSize() > 0, "must have at least one node");
-
-      index = BinarySearchInternal(root_write_page, 1, root_write_page->GetSize(), key);
-      root_write_guard = std::move(bpm_->FetchPageWrite(root_write_page->ValueAt(index - 1)));
-      ctx.write_set_.push_back(std::move(root_write_guard));
-      root_write_page = ctx.write_set_.back().AsMut<InternalPage>();  // goto most right child
-    }
-
-    leaf_write_guard = std::move(ctx.write_set_.back());
-    ctx.write_set_.pop_back();  // the target leaf was pushed to ctx above
-    leaf_write_page = leaf_write_guard.AsMut<LeafPage>();
-
-    should_split = (leaf_write_page->GetSize() == leaf_write_page->GetMaxSize());
-    if (!should_split) {
-      ctx.header_page_ = std::nullopt;
-      ctx.write_set_.clear();
-      header_page_guard.Drop();
-    }
+    ctx.write_set_.clear();
   }
 
   // check is here first
@@ -326,8 +286,8 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   // split up
   while (true) {
     if (root_write_page->GetSize() < root_write_page->GetMaxSize()) {
+      ctx.header_page_ = std::nullopt;
       ctx.write_set_.clear();
-      header_page_guard.Drop();
       // insert into parent node
       BUSTUB_ASSERT(root_write_page->IsLeafPage() == false, "root must not be leaf page in the up split");
       BUSTUB_ASSERT(root_write_page->GetSize() > 1, "root must have at least one element!");
@@ -422,8 +382,8 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   }
 
 ROOT_SPLIT : {
-  header_page_guard.Drop();
-  ctx.header_page_ = bpm_->FetchPageWrite(header_page_id_);
+  // header_page_guard.Drop();
+  // ctx.header_page_ = bpm_->FetchPageWrite(header_page_id_);
   // create and init new root
   page_id_t new_root_page_id;
   bpm_->NewPageGuarded(&new_root_page_id);
@@ -436,7 +396,7 @@ ROOT_SPLIT : {
   new_root->SetKeyAt(1, tmp_key);
   new_root->SetValueAt(1, page_id);
 
-  auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
+  // auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
   // remember to set key0 pointing to old root
   new_root->SetValueAt(0, header_page->root_page_id_);
   header_page->root_page_id_ = new_root_page_id;

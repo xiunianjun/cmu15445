@@ -62,8 +62,12 @@ INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
   auto page = guard_.As<LeafPage>();
   cnt_++;
+  BUSTUB_ASSERT(page->GetSize() > 0, "page size must be bigger than zero!");
   if (cnt_ >= page->GetSize()) {
     pgid_ = page->GetNextPageId();
+    if (pgid_ != INVALID_PAGE_ID) {
+      guard_ = bpm_->FetchPageRead(pgid_);
+    }
     cnt_ = 0;
   }
   return *this;
