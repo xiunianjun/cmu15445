@@ -15,7 +15,7 @@
 #include "common/rid.h"
 #include "storage/page/b_plus_tree_leaf_page.h"
 
-namespace bustub { // 1
+namespace bustub {  // 1
 
 /*****************************************************************************
  * HELPER METHODS AND UTILITIES
@@ -27,10 +27,10 @@ namespace bustub { // 1
  */
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::Init(int max_size) {
-    SetMaxSize(max_size);
-    SetSize(0);
-    SetPageType(IndexPageType::LEAF_PAGE);
-    next_page_id_ = INVALID_PAGE_ID;
+  SetMaxSize(max_size);
+  SetSize(0);
+  SetPageType(IndexPageType::LEAF_PAGE);
+  next_page_id_ = INVALID_PAGE_ID;
 }
 
 /*
@@ -44,9 +44,7 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::ValueAt(int index) const -> ValueType {
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_LEAF_PAGE_TYPE::PairAt(int index) const -> const MappingType & {
-  return array_[index];
-}
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::PairAt(int index) const -> const MappingType & { return array_[index]; }
 
 /**
  * Helper methods to set/get next page id
@@ -78,7 +76,6 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::SetValueAt(int index, const ValueType &value) {
   BUSTUB_ASSERT(index >= 0 && index < GetSize(), "key should be a valid value");
   array_[index].second = std::move(value);
 }
-
 
 template class BPlusTreeLeafPage<GenericKey<4>, RID, GenericComparator<4>>;
 template class BPlusTreeLeafPage<GenericKey<8>, RID, GenericComparator<8>>;

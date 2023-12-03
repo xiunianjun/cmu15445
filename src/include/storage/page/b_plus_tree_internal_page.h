@@ -39,7 +39,7 @@ namespace bustub {
 INDEX_TEMPLATE_ARGUMENTS
 class BPlusTreeInternalPage : public BPlusTreePage {
  private:
-  #define MappingType std::pair<KeyType, ValueType>
+#define MappingType std::pair<KeyType, ValueType>
   // Flexible array member for page data.
   MappingType array_[0];
 
@@ -113,6 +113,5 @@ class BPlusTreeInternalPage : public BPlusTreePage {
 
     return kstr;
   }
-
 };
 }  // namespace bustub

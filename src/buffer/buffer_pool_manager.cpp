@@ -144,7 +144,7 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
 
     return res;
   }
-  
+
   if (free_list_.empty()) {
     frame_id_t fid;
     if (!replacer_->Evict(&fid)) {

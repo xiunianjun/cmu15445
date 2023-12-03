@@ -25,9 +25,9 @@ namespace bustub {
  */
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Init(int max_size) {
-    SetMaxSize(max_size);
-    SetSize(1); // internal page has a child defaultly
-    SetPageType(IndexPageType::INTERNAL_PAGE);
+  SetMaxSize(max_size);
+  SetSize(1);  // internal page has a child defaultly
+  SetPageType(IndexPageType::INTERNAL_PAGE);
 }
 /*
  * Helper method to get/set the key associated with input "index"(a.k.a
@@ -35,19 +35,19 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Init(int max_size) {
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::KeyAt(int index) const -> KeyType {
-  BUSTUB_ASSERT(index >= 1 && index < GetSize(), "key should be a valid value"); // first key is invalid
+  BUSTUB_ASSERT(index >= 1 && index < GetSize(), "key should be a valid value");  // first key is invalid
   return array_[index].first;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
-  BUSTUB_ASSERT(index >= 1 && index < GetSize(), "key should be a valid value"); // first key is invalid
+  BUSTUB_ASSERT(index >= 1 && index < GetSize(), "key should be a valid value");  // first key is invalid
   array_[index].first = std::move(key);
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetValueAt(int index, const ValueType &value) {
-  BUSTUB_ASSERT(index >= 0 && index < GetSize(), "key should be a valid value"); // first key is invalid
+  BUSTUB_ASSERT(index >= 0 && index < GetSize(), "key should be a valid value");  // first key is invalid
   array_[index].second = std::move(value);
 }
 
@@ -57,20 +57,19 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetValueAt(int index, const ValueType &valu
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index) const -> ValueType {
-  BUSTUB_ASSERT(index >= 0 && index < GetSize(), "key should be a valid value"); // first key is invalid
+  BUSTUB_ASSERT(index >= 0 && index < GetSize(), "key should be a valid value");  // first key is invalid
   return array_[index].second;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueIndex(const ValueType &value) const -> int {
-  for(int i = 0; i < GetSize(); i ++) {
-      if(array_[i].second == value) {
-	      return i;
-      }	
+  for (int i = 0; i < GetSize(); i++) {
+    if (array_[i].second == value) {
+      return i;
+    }
   }
   return -1;
 }
-
 
 // valuetype for internalNode should be page id_t
 template class BPlusTreeInternalPage<GenericKey<4>, page_id_t, GenericComparator<4>>;
