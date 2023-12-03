@@ -62,7 +62,6 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
       return nullptr;
     }
 
-    pages_latch_[fid].lock();
     page_table_.erase(page_table_.find(pages_[fid].GetPageId()));
     *page_id = AllocatePage();
     page_table_.insert(std::make_pair(*page_id, fid));
@@ -70,9 +69,12 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
     replacer_->RecordAccess(fid);
     replacer_->SetEvictable(fid, false);
 
+    pages_latch_[fid].lock();
+
     if (pages_[fid].IsDirty()) {  // write origin back
       disk_manager_->WritePage(pages_[fid].GetPageId(), pages_[fid].GetData());
     }
+    latch_.unlock();
 
     Page *res = &(pages_[fid]);
     res->page_id_ = *page_id;
@@ -81,7 +83,6 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
     res->pin_count_ = 1;
 
     pages_latch_[fid].unlock();
-    latch_.unlock();
     return res;
   }
 
@@ -91,6 +92,7 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
 
   pages_latch_[fid].lock();
   page_table_.insert(std::make_pair(*page_id, fid));
+  latch_.unlock();
 
   replacer_->RecordAccess(fid);
   replacer_->SetEvictable(fid, false);
@@ -104,7 +106,6 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   res->pin_count_ = 1;
   pages_latch_[fid].unlock();
 
-  latch_.unlock();
   return res;
 }
 
@@ -152,29 +153,29 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
       return nullptr;
     }
     
-    pages_latch_[fid].lock();
     page_table_.erase(page_table_.find(pages_[fid].GetPageId()));
     page_table_.insert(std::make_pair(page_id, fid));
 
     replacer_->RecordAccess(fid, access_type);
     replacer_->SetEvictable(fid, false);
 
+    pages_latch_[fid].lock();
 
     if (pages_[fid].IsDirty()) {
       disk_manager_->WritePage(pages_[fid].GetPageId(), pages_[fid].GetData());
     }
 
     Page *res = &(pages_[fid]);
-    res->page_id_ = page_id;
     res->ResetMemory();
     // read from disk
     disk_manager_->ReadPage(page_id, res->GetData());
-    res->is_dirty_ = false;
+    latch_.unlock();
 
+    res->is_dirty_ = false;
+    res->page_id_ = page_id;
     res->pin_count_ = 1;
 
     pages_latch_[fid].unlock();
-    latch_.unlock();
     return res;
   }
   frame_id_t fid = free_list_.front();
