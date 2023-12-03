@@ -184,7 +184,7 @@ TEST(BPlusTreeTests, DeleteTest3) {  // NOLINT
   // create transaction
   auto *transaction = new Transaction(0);
 
-  int64_t scale = 50;
+  int64_t scale = 50000;
   std::vector<int64_t> keys;
   for (int64_t key = 1; key < scale; key++) {
     keys.push_back(key);
@@ -200,14 +200,14 @@ TEST(BPlusTreeTests, DeleteTest3) {  // NOLINT
     tree.Insert(index_key, rid, transaction);
   }
   printf("insert ok\n");
-  tree.Draw(bpm, "btree.dot");
+  // tree.Draw(bpm, "btree.dot");
 
   size_t num_to_select = scale - 1;
   std::vector<int64_t> remove_keys;
   // std::vector<int64_t> remove_keys = {4, 8, 2, 9, 3};
   remove_keys.reserve(num_to_select);
-  std::sample(keys.begin(), keys.end(), std::back_inserter(remove_keys),
-              num_to_select, std::mt19937{std::random_device{}()});
+  std::sample(keys.begin(), keys.end(), std::back_inserter(remove_keys), num_to_select,  // NOLINT
+              std::mt19937{std::random_device{}()});                                     // NOLINT
   // std::cout << "remove keys: ";
   // for (const auto& key : remove_keys) {
   //     std::cout << key << " ";
@@ -217,21 +217,14 @@ TEST(BPlusTreeTests, DeleteTest3) {  // NOLINT
   int idx = 0;
   for (auto key : remove_keys) {
     index_key.SetFromInteger(key);
-    if (idx == 15) {
-      printf("4\n");
-    }
-    if (key == 7) {
-      printf("7\n");
-    }
     tree.Remove(index_key, transaction);
-    printf("%d\n", idx);
-    if (idx >= 0 && idx <= 10) {
-      char buf[512];
-      sprintf(buf, "trees/tree_%d.dot", idx);
-      tree.Draw(bpm, buf);
-    }
+    // if (idx >= 0 && idx <= 10) {
+    //   char buf[512];
+    //   sprintf(buf, "trees/tree_%d.dot", idx);
+    //   tree.Draw(bpm, buf);
+    // }
 
-    idx ++;
+    idx++;
   }
 
   int64_t size = 0;

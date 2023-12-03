@@ -69,7 +69,8 @@ auto BPLUSTREE_TYPE::BinarySearchLeaf(const LeafPage *leaf, int begin, int end, 
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::BinarySearchInternal(const InternalPage *internal, int begin, int end, const KeyType &key, bool upper) -> int {
+auto BPLUSTREE_TYPE::BinarySearchInternal(const InternalPage *internal, int begin, int end, const KeyType &key,
+                                          bool upper) -> int {
   BUSTUB_ASSERT(!(internal->IsLeafPage()), "internal should not be a leaf page!");
 
   int middle = (begin + end) / 2;
@@ -482,7 +483,6 @@ INSERTION_END:
  */
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
-  std::cout << "remove key " << key << std::endl;
   // Declaration of context instance.
   Context ctx;
   // get write page of root
@@ -563,7 +563,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   ctx.position_set_.pop_back();
 
   WritePageGuard parent_guard;
-  InternalPage* parent;
+  InternalPage *parent;
   WritePageGuard root_guard;
   WritePageGuard next_guard;
   WritePageGuard prev_guard;
@@ -739,7 +739,7 @@ MERGE_NODE:
       root->SetValueAt(j - 1, root->ValueAt(j));
     }
     root->IncreaseSize(-1);
-    
+
     if (ctx.write_set_.empty()) {
       if (root->GetSize() == 1) {
         // change root!
@@ -813,7 +813,7 @@ MERGE_NODE:
       } else {
         merge_to_page->SetKeyAt(idx, delete_key);
       }
-        // merge_to_page->SetKeyAt(idx, delete_key);
+      // merge_to_page->SetKeyAt(idx, delete_key);
       merge_to_page->SetValueAt(idx, merge_from_page->ValueAt(0));
       idx++;
 
@@ -870,7 +870,7 @@ MERGE_NODE:
       next_guard.Drop();
     }
 
-MERGE_UPDATE:
+  MERGE_UPDATE:
     root_guard.Drop();
 
     // update parent
