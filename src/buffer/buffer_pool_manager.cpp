@@ -62,11 +62,6 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
       return nullptr;
     }
 
-    if (pages_[fid].IsDirty()) {  // write origin back
-      disk_manager_->WritePage(pages_[fid].GetPageId(), pages_[fid].GetData());
-    }
-
-
     page_table_.erase(page_table_.find(pages_[fid].GetPageId()));
     *page_id = AllocatePage();
     page_table_.insert(std::make_pair(*page_id, fid));
@@ -136,9 +131,9 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
   if (it != page_table_.end()) {
     frame_id_t fid = it->second;
 
-    pages_latch_[fid].lock();
     replacer_->RecordAccess(fid, access_type);
     replacer_->SetEvictable(fid, false);
+    pages_latch_[fid].lock();
     latch_.unlock();
 
     pages_[fid].pin_count_++;
@@ -156,11 +151,6 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
       latch_.unlock();
       return nullptr;
     }
-    
-    if (pages_[fid].IsDirty()) {
-      disk_manager_->WritePage(pages_[fid].GetPageId(), pages_[fid].GetData());
-    }
-
     page_table_.erase(page_table_.find(pages_[fid].GetPageId()));
     page_table_.insert(std::make_pair(page_id, fid));
 
@@ -244,8 +234,13 @@ auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unus
   if (pages_[fid].GetPinCount() == 0) {
     replacer_->SetEvictable(fid, true);  // can only be evict when has no pin count
   }
-  pages_latch_[fid].unlock();
   latch_.unlock_shared();
+
+  if (pages_[fid].GetPinCount() == 0 && pages_[fid].IsDirty()) {
+    pages_[fid].is_dirty_ = false;
+    disk_manager_->WritePage(pages_[fid].GetPageId(), pages_[fid].GetData());
+  }
+  pages_latch_[fid].unlock();
 
   return true;
 }
@@ -265,11 +260,12 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
 
   pages_latch_[fid].lock();
 
-  if (pages_[fid].is_dirty_)
-    disk_manager_->WritePage(page_id, pages_[fid].GetData());
   latch_.unlock_shared();
-  pages_[fid].is_dirty_ = false;
 
+  if (pages_[fid].is_dirty_) {
+    pages_[fid].is_dirty_ = false;
+    disk_manager_->WritePage(page_id, pages_[fid].GetData());
+  }
   pages_latch_[fid].unlock();
 
   return true;
@@ -314,9 +310,6 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
     return false;
   }
 
-  if (pages_[fid].IsDirty()) {
-    disk_manager_->WritePage(page_id, pages_[fid].GetData());
-  }
   latch_.unlock();
   pages_[fid].page_id_ = INVALID_PAGE_ID;
   pages_[fid].ResetMemory();
