@@ -659,7 +659,6 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   root = root_guard.AsMut<InternalPage>();
 
   if (leaf->GetSize() >= leaf->GetMinSize()) {
-    update_key = leaf->KeyAt(0);
     if (leaf_position > 0) {
       root->SetKeyAt(leaf_position, leaf->KeyAt(0));
     }
@@ -715,6 +714,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   leaf->IncreaseSize(1);
   if (next_leaf_page == nullptr ||
       (prev_leaf_page != nullptr && next_leaf_page->GetSize() <= prev_leaf_page->GetSize())) {
+    next_guard.Drop();
     // steal one element from prev
     for (int j = leaf->GetSize() - 1; j >= 1; j--) {
       leaf->SetKeyAt(j, leaf->KeyAt(j - 1));
@@ -725,6 +725,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
     prev_leaf_page->IncreaseSize(-1);
     prev_guard.Drop();
   } else {
+    prev_guard.Drop();
     // steal one element from next
     leaf->SetKeyAt(leaf->GetSize() - 1, next_leaf_page->KeyAt(0));
     leaf->SetValueAt(leaf->GetSize() - 1, next_leaf_page->ValueAt(0));
@@ -742,11 +743,10 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
     root->SetKeyAt(leaf_position, leaf->KeyAt(0));
   }
 
+UPDATE_PARENT:
   root_guard.Drop();
   update_key = leaf->KeyAt(0);
   leaf_guard.Drop();
-
-UPDATE_PARENT:
   // update parent
   while (!ctx.write_set_.empty()) {
     // get parent
@@ -789,10 +789,12 @@ MERGE_NODE:
     merge_to_guard = std::move(prev_guard);
     merge_from_guard = std::move(leaf_guard);
     delete_key = root->KeyAt(leaf_position);
+    next_guard.Drop();
   } else {
     merge_to_guard = std::move(leaf_guard);
     merge_from_guard = std::move(next_guard);
     delete_key = root->KeyAt(leaf_position + 1);
+    prev_guard.Drop();
   }
   merge_to_page = merge_to_guard.AsMut<LeafPage>();
   merge_from_page = merge_from_guard.AsMut<LeafPage>();
@@ -923,6 +925,7 @@ MERGE_NODE:
     // affect the grandparent.
     if (next_internal_page == nullptr ||
         (prev_internal_page != nullptr && next_internal_page->GetSize() <= prev_internal_page->GetSize())) {
+      next_guard.Drop();  // NOLINT
       // steal one element from prev
       if (comparator_(delete_key, parent->KeyAt(internal_position)) == 0) {
         BUSTUB_ASSERT(false, "the deleted key has no chance to be in position 0.");
@@ -940,6 +943,7 @@ MERGE_NODE:
       prev_internal_page->IncreaseSize(-1);
       prev_guard.Drop();
     } else {
+      prev_guard.Drop();  // NOLINT
       // steal one element from next
       root->IncreaseSize(1);
       root->SetKeyAt(root->GetSize() - 1, parent->KeyAt(internal_position + 1));
