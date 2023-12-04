@@ -213,6 +213,12 @@ HAVE_BEEN_UPDATE:
   auto leaf_write_guard = bpm_->FetchPageWrite(leaf_page_id);
   auto leaf_write_page = leaf_write_guard.AsMut<LeafPage>();
 
+  // check is here first
+  index = BinarySearchLeaf(leaf_write_page, 0, leaf_write_page->GetSize(), key);
+  if (index != leaf_write_page->GetSize() && index != -1 && comparator_(key, leaf_write_page->KeyAt(index)) == 0) {
+    return false;
+  }
+
   bool should_split = (leaf_write_page->GetSize() == leaf_write_page->GetMaxSize());
   ctx.read_set_.clear();
   if (should_split) {
@@ -485,13 +491,11 @@ INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   // Declaration of context instance.
   Context ctx;
-  ctx.header_page_ = bpm_->FetchPageWrite(header_page_id_);
-  // ReadPageGuard header_page_guard = bpm_->FetchPageRead(header_page_id_);
-  // auto header_read_page = header_page_guard.As<BPlusTreeHeaderPage>();
+
+  ReadPageGuard header_page_guard = bpm_->FetchPageRead(header_page_id_);
+  auto header_read_page = header_page_guard.As<BPlusTreeHeaderPage>();
   BPlusTreeHeaderPage *header_write_page = nullptr;
-  header_write_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
-  ctx.root_page_id_ = header_write_page->root_page_id_;
-  // ctx.root_page_id_ = header_read_page->root_page_id_;
+  ctx.root_page_id_ = header_read_page->root_page_id_;
 
   // b+ tree is empty
   if (ctx.root_page_id_ == INVALID_PAGE_ID) {
@@ -501,39 +505,113 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   BUSTUB_ASSERT(ctx.root_page_id_ != INVALID_PAGE_ID, "root page id should be valid.");
 
   // get root page
-  auto guard = bpm_->FetchPageWrite(ctx.root_page_id_);
-  auto root = guard.AsMut<InternalPage>();
-  ctx.write_set_.push_back(std::move(guard));
+  ReadPageGuard root_read_guard = bpm_->FetchPageRead(ctx.root_page_id_);
+  ctx.read_set_.push_back(std::move(root_read_guard));
+  auto root_read_page = ctx.read_set_.back().As<InternalPage>();
+
+  WritePageGuard root_write_guard;
+  InternalPage *root = nullptr;
 
   bool need_update = false;
   int index = -1;
 
   /* step1 get target leaf node */
   while (true) {
-    if (root->IsLeafPage()) {
+    if (root_read_page->IsLeafPage()) {
       break;
     }
 
-    BUSTUB_ASSERT(root->GetSize() > 0, "must have at least one node");
+    BUSTUB_ASSERT(root_read_page->GetSize() > 0, "must have at least one node");
 
-    index = BinarySearchInternal(root, 1, root->GetSize(), key, false);
-    bool has_key = (index != root->GetSize() && comparator_(key, root->KeyAt(index)) == 0);
+    index = BinarySearchInternal(root_read_page, 1, root_read_page->GetSize(), key, false);
+    bool has_key = (index != root_read_page->GetSize() && comparator_(key, root_read_page->KeyAt(index)) == 0);
     if (has_key) {
-      index ++;
+      index++;
     }
-    guard = std::move(bpm_->FetchPageWrite(root->ValueAt(index - 1)));
-    root = guard.AsMut<InternalPage>();  // goto left child
-    ctx.write_set_.push_back(std::move(guard));
+    root_read_guard = std::move(bpm_->FetchPageRead(root_read_page->ValueAt(index - 1)));
+    root_read_page = root_read_guard.As<InternalPage>();  // goto left child
+    ctx.read_set_.push_back(std::move(root_read_guard));
     ctx.position_set_.push_back(index - 1);
-    if (has_key && !(root->IsLeafPage())) {
+    if (has_key && !(root_read_page->IsLeafPage())) {
       need_update = true;
     }
   }
 
-  auto leaf_guard = std::move(ctx.write_set_.back());
+  auto leaf_page_id = ctx.read_set_.back().PageId();
+  ctx.read_set_.pop_back();  // the target leaf was pushed to ctx above
+  int leaf_position = -1;
+  if (!(ctx.position_set_.empty())) {
+    leaf_position = ctx.position_set_.back();
+    ctx.position_set_.pop_back();
+  }
+
+  auto leaf_guard = bpm_->FetchPageWrite(leaf_page_id);
   auto leaf = leaf_guard.AsMut<LeafPage>();
-  if (!(ctx.write_set_.empty())) {
+
+  // check is here first
+  index = BinarySearchLeaf(leaf, 0, leaf->GetSize(), key);
+  if (index == leaf->GetSize() || index == -1 || comparator_(key, leaf->KeyAt(index)) != 0) {  // not here
+    return;
+  }
+
+  bool should_update = (!(leaf->GetSize() > leaf->GetMinSize() && !need_update));
+  ctx.read_set_.clear();
+  ctx.position_set_.clear();
+  if (should_update) {
+    leaf_guard.Drop();
+    header_page_guard.Drop();
+    need_update = false;
+
+    ctx.header_page_ = bpm_->FetchPageWrite(header_page_id_);
+    header_write_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
+    ctx.root_page_id_ = header_write_page->root_page_id_;
+
+    root_write_guard = bpm_->FetchPageWrite(ctx.root_page_id_);
+    ctx.write_set_.push_back(std::move(root_write_guard));
+    root = ctx.write_set_.back().AsMut<InternalPage>();
+
+    while (true) {
+      if (root->IsLeafPage()) {
+        break;
+      }
+
+      BUSTUB_ASSERT(root->GetSize() > 0, "must have at least one node");
+
+      index = BinarySearchInternal(root, 1, root->GetSize(), key, false);
+      bool has_key = (index != root->GetSize() && comparator_(key, root->KeyAt(index)) == 0);
+      if (has_key) {
+        index++;
+      }
+      root_write_guard = std::move(bpm_->FetchPageWrite(root->ValueAt(index - 1)));
+      ctx.write_set_.push_back(std::move(root_write_guard));
+      root = ctx.write_set_.back().AsMut<InternalPage>();  // goto most right child
+      ctx.position_set_.push_back(index - 1);
+      if (has_key && !(root->IsLeafPage())) {
+        need_update = true;
+      }
+    }
+
+    BUSTUB_ASSERT(!(ctx.write_set_.empty()), "have at least one node");
+
+    leaf_guard = std::move(ctx.write_set_.back());
     ctx.write_set_.pop_back();  // the target leaf was pushed to ctx above
+    leaf = leaf_guard.AsMut<LeafPage>();
+    if (!(ctx.position_set_.empty())) {
+      leaf_position = ctx.position_set_.back();
+      ctx.position_set_.pop_back();
+    }
+
+    should_update = (!(leaf->GetSize() > leaf->GetMinSize() && !need_update));
+    if (!should_update) {
+      ctx.write_set_.clear();
+      ctx.header_page_ = std::nullopt;
+    }
+  }
+
+  // check is here first
+  index = BinarySearchLeaf(leaf, 0, leaf->GetSize(), key);
+  if (index == leaf->GetSize() || index == -1 || comparator_(key, leaf->KeyAt(index)) != 0) {  // not here
+    return;
   }
 
   // delete key
@@ -546,22 +624,21 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
     leaf->IncreaseSize(-1);
   }
 
+  if (!should_update) {
+    return;
+  }
+
   if (ctx.write_set_.empty()) {
     if (leaf->GetSize() > 0) {
       return;
     }
     // switch to an empty tree
-    // header_page_guard.Drop();
-    // ctx.header_page_ = bpm_->FetchPageWrite(header_page_id_);
     auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
     header_page->root_page_id_ = INVALID_PAGE_ID;
     ctx.root_page_id_ = INVALID_PAGE_ID;
     ctx.header_page_ = std::nullopt;
     return;
   }
-
-  int leaf_position = ctx.position_set_.back();
-  ctx.position_set_.pop_back();
 
   WritePageGuard parent_guard;
   InternalPage *parent;
@@ -581,13 +658,6 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   root_guard = std::move(parent_guard);
   root = root_guard.AsMut<InternalPage>();
 
-  // if (!need_update) {
-  //   header_page_guard.Drop();
-  //   ctx.header_page_ = bpm_->FetchPageWrite(header_page_id_);
-  //   header_write_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
-  //   ctx.root_page_id_ = header_write_page->root_page_id_;
-  // }
-
   if (leaf->GetSize() >= leaf->GetMinSize()) {
     update_key = leaf->KeyAt(0);
     if (leaf_position > 0) {
@@ -595,7 +665,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
     }
 
     if (!need_update) {
-      return ;
+      return;
     }
     goto UPDATE_PARENT;
   }
