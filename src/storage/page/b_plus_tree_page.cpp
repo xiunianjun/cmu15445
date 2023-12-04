@@ -26,7 +26,7 @@ void BPlusTreePage::SetPageType(IndexPageType page_type) { page_type_ = page_typ
  */
 auto BPlusTreePage::GetSize() const -> int { return size_; }
 void BPlusTreePage::SetSize(int size) { size_ = size; }
-void BPlusTreePage::IncreaseSize(int amount) {  // amount为负数表示减小size
+void BPlusTreePage::IncreaseSize(int amount) {  // if amount < 0, it means decrease the size
   size_ += amount;
 }
 

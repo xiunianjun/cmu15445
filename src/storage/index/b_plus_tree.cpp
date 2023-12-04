@@ -634,7 +634,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   if (next_leaf_page == nullptr ||
       (prev_leaf_page != nullptr && next_leaf_page->GetSize() <= prev_leaf_page->GetSize())) {
     // steal one element from prev
-    for (int j = 1; j < leaf->GetSize(); j++) {
+    for (int j = leaf->GetSize() - 1; j >= 1; j --) {
       leaf->SetKeyAt(j, leaf->KeyAt(j - 1));
       leaf->SetValueAt(j, leaf->ValueAt(j - 1));
     }
@@ -845,7 +845,7 @@ MERGE_NODE:
       }
 
       root->IncreaseSize(1);
-      for (int j = 2; j < root->GetSize(); j++) {
+      for (int j = root->GetSize() - 1; j >= 2; j --) {
         root->SetKeyAt(j, root->KeyAt(j - 1));
         root->SetValueAt(j, root->ValueAt(j - 1));
       }
