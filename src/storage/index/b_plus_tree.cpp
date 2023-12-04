@@ -496,7 +496,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
     return;
   }
 
-  ctx.header_page_ = std::nullopt;
+  // ctx.header_page_ = std::nullopt;
 
   BUSTUB_ASSERT(ctx.root_page_id_ != INVALID_PAGE_ID, "root page id should be valid.");
 
@@ -551,7 +551,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
       return;
     }
     // switch to an empty tree
-    ctx.header_page_ = bpm_->FetchPageWrite(header_page_id_);
+    // ctx.header_page_ = bpm_->FetchPageWrite(header_page_id_);
     auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
     header_page->root_page_id_ = INVALID_PAGE_ID;
     ctx.root_page_id_ = INVALID_PAGE_ID;
@@ -743,7 +743,7 @@ MERGE_NODE:
     if (ctx.write_set_.empty()) {
       if (root->GetSize() == 1) {
         // change root!
-        ctx.header_page_ = bpm_->FetchPageWrite(header_page_id_);
+        // ctx.header_page_ = bpm_->FetchPageWrite(header_page_id_);
         auto header_page = ctx.header_page_.value().AsMut<BPlusTreeHeaderPage>();
         header_page->root_page_id_ = root->ValueAt(0);
         ctx.root_page_id_ = root->ValueAt(0);

@@ -236,7 +236,7 @@ auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unus
   }
   latch_.unlock_shared();
 
-  if (pages_[fid].GetPinCount() == 0 && pages_[fid].IsDirty()) {
+  if (pages_[fid].GetPinCount() == 0) {
     pages_[fid].is_dirty_ = false;
     disk_manager_->WritePage(pages_[fid].GetPageId(), pages_[fid].GetData());
   }
