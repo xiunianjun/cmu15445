@@ -41,6 +41,8 @@ class UpdateExecutor : public AbstractExecutor {
   UpdateExecutor(ExecutorContext *exec_ctx, const UpdatePlanNode *plan,
                  std::unique_ptr<AbstractExecutor> &&child_executor);
 
+  ~UpdateExecutor();
+  
   /** Initialize the update */
   void Init() override;
 
@@ -64,5 +66,7 @@ class UpdateExecutor : public AbstractExecutor {
   const TableInfo *table_info_;
   /** The child executor to obtain value from */
   std::unique_ptr<AbstractExecutor> child_executor_;
+  int16_t update_num_;
+  Schema* one_value_schema_;
 };
 }  // namespace bustub

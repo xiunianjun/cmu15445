@@ -48,7 +48,15 @@ class SeqScanExecutor : public AbstractExecutor {
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); }
 
  private:
+  /** SeqScanExecutor::Next() returns `true` when scan is incomplete */
+  constexpr static const bool EXECUTOR_ACTIVE{true};
+
+  /** SeqScanExecutor::Next() returns `false` when scan is complete */
+  constexpr static const bool EXECUTOR_EXHAUSTED{false};
+
   /** The sequential scan plan node to be executed */
   const SeqScanPlanNode *plan_;
+  std::unique_ptr<TableIterator> table_iterator_;
+  TableHeap* table_heap_;
 };
 }  // namespace bustub
