@@ -44,7 +44,9 @@ auto INDEXITERATOR_TYPE::IsEnd() -> bool { return pgid_ == INVALID_PAGE_ID; }
 
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator*() -> const MappingType & {
+  BUSTUB_ASSERT(!(this->IsEnd()), "Can't apply * operator to end iterator!");
   auto page = guard_.As<LeafPage>();
+  BUSTUB_ASSERT(cnt_ < page->GetSize(), "Can't apply * operator to end iterator!");
   return page->PairAt(cnt_);
 }
 
@@ -67,8 +69,8 @@ auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
     pgid_ = page->GetNextPageId();
     if (pgid_ != INVALID_PAGE_ID) {
       guard_ = bpm_->FetchPageRead(pgid_);
+      cnt_ = 0;
     }
-    cnt_ = 0;
   }
   return *this;
 }

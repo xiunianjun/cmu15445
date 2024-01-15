@@ -40,13 +40,13 @@ void InsertExecutor::Init() {
   RID rid;
   while (child_executor_->Next(&tuple, &rid)) {
     // std::cout << "insert tuple: " << tuple.ToString(&(plan_->GetChildPlan()->OutputSchema())) << std::endl;
-    table_heap->InsertTuple(TupleMeta(), tuple);
+    rid = table_heap->InsertTuple(TupleMeta(), tuple).value();
     insert_num_++;
 
     // update indexes
     auto indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_);
     for (auto index_info : indexes) {
-      index_info->index_->InsertEntry(tuple.KeyFromTuple(plan_->OutputSchema(), index_info->key_schema_, index_info->index_->GetKeyAttrs()), rid, exec_ctx_->GetTransaction());
+      index_info->index_->InsertEntry(tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()), rid, exec_ctx_->GetTransaction());
     }
   }
 }

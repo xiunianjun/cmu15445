@@ -52,7 +52,9 @@ void UpdateExecutor::Init() {
     for (auto exp : plan_->target_expressions_) {
       insert_values.push_back(exp->Evaluate(&tuple, table_info->schema_));
     }
-    table_heap->InsertTuple(TupleMeta(), Tuple(insert_values, &(table_info->schema_)));
+    tuple = Tuple(insert_values, &(table_info->schema_));
+    rid = table_heap->InsertTuple(TupleMeta(), tuple).value();
+
     // update indexes
     indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_);
     for (auto index_info : indexes) {
