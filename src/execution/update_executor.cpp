@@ -30,6 +30,12 @@ void UpdateExecutor::Init() {
   // initialize
   child_executor_->Init();
   update_num_ = 0;
+}
+
+auto UpdateExecutor::Next([[maybe_unused]] Tuple *param_tuple, RID *param_rid) -> bool {
+  if (update_num_ == -1) {
+    return false;
+  }
 
   // insert into table
   auto table_info = exec_ctx_->GetCatalog()->GetTable(plan_->TableOid());
@@ -63,17 +69,11 @@ void UpdateExecutor::Init() {
     
     update_num_++;
   }
-}
-
-auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
-  if (update_num_ == -1) {
-    return false;
-  }
 
   std::vector<Value> tmp_val;
   tmp_val.push_back(Value(TypeId::INTEGER, update_num_));
 
-  *tuple = Tuple(tmp_val, one_value_schema_);
+  *param_tuple = Tuple(tmp_val, one_value_schema_);
 
   update_num_ = -1;
   return true;

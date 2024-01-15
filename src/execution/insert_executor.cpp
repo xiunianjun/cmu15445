@@ -32,6 +32,12 @@ void InsertExecutor::Init() {
   // initialize
   child_executor_->Init();
   insert_num_ = 0;
+}
+
+auto InsertExecutor::Next([[maybe_unused]] Tuple *param_tuple, RID *param_rid) -> bool {
+  if (insert_num_ == -1) {
+    return false;
+  }
 
   // insert into table
   auto table_info = exec_ctx_->GetCatalog()->GetTable(plan_->TableOid());
@@ -49,17 +55,11 @@ void InsertExecutor::Init() {
       index_info->index_->InsertEntry(tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()), rid, exec_ctx_->GetTransaction());
     }
   }
-}
-
-auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
-  if (insert_num_ == -1) {
-    return false;
-  }
 
   std::vector<Value> tmp_val;
   tmp_val.push_back(Value(TypeId::INTEGER, insert_num_));
 
-  *tuple = Tuple(tmp_val, one_value_schema_);
+  *param_tuple = Tuple(tmp_val, one_value_schema_);
 
   insert_num_ = -1;
   return true;

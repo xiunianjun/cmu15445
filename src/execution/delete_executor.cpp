@@ -31,6 +31,12 @@ void DeleteExecutor::Init() {
   // initialize
   child_executor_->Init();
   delete_num_ = 0;
+}
+
+auto DeleteExecutor::Next([[maybe_unused]] Tuple *param_tuple, RID *param_rid) -> bool {
+  if (delete_num_ == -1) {
+    return false;
+  }
 
   // insert into table
   auto table_info = exec_ctx_->GetCatalog()->GetTable(plan_->TableOid());
@@ -50,17 +56,11 @@ void DeleteExecutor::Init() {
     
     delete_num_++;
   }
-}
-
-auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
-  if (delete_num_ == -1) {
-    return false;
-  }
 
   std::vector<Value> tmp_val;
   tmp_val.push_back(Value(TypeId::INTEGER, delete_num_));
 
-  *tuple = Tuple(tmp_val, one_value_schema_);
+  *param_tuple = Tuple(tmp_val, one_value_schema_);
 
   delete_num_ = -1;
   return true;
