@@ -71,13 +71,52 @@ class SimpleAggregationHashTable {
    * @param input The input value
    */
   void CombineAggregateValues(AggregateValue *result, const AggregateValue &input) {
+    if (input.aggregates_.empty())  return;
+
+    BUSTUB_ASSERT(!(result->aggregates_.empty()), "Param result must be initiallized!");
     for (uint32_t i = 0; i < agg_exprs_.size(); i++) {
       switch (agg_types_[i]) {
         case AggregationType::CountStarAggregate:
+          result->aggregates_[i] = result->aggregates_[i].Add(Value(TypeId::INTEGER, 1));
+          break;
         case AggregationType::CountAggregate:
+          if (!(input.aggregates_[i].IsNull())) {
+            if (result->aggregates_[i].IsNull()) {
+               result->aggregates_[i] = ValueFactory::GetIntegerValue(0);
+            }
+            result->aggregates_[i] = result->aggregates_[i].Add(Value(TypeId::INTEGER, 1));
+          }
+          break;
         case AggregationType::SumAggregate:
+          if (!(input.aggregates_[i].IsNull())) {
+            if (result->aggregates_[i].IsNull()) {
+                result->aggregates_[i] = ValueFactory::GetIntegerValue(0);
+            }
+
+            result->aggregates_[i] = result->aggregates_[i].Add(input.aggregates_[i]);
+          }
+          break;
         case AggregationType::MinAggregate:
+          if (result->aggregates_[i].IsNull()) {
+              result->aggregates_[i] = ValueFactory::GetIntegerValue(BUSTUB_INT32_MAX);
+          }
+
+          if (!(result->aggregates_[i].IsNull())) {
+            if (result->aggregates_[i].CompareGreaterThan(input.aggregates_[i]) == CmpBool::CmpTrue) {
+              result->aggregates_[i] = input.aggregates_[i];
+            }
+          }
+          break;
         case AggregationType::MaxAggregate:
+          if (result->aggregates_[i].IsNull()) {
+              result->aggregates_[i] = ValueFactory::GetIntegerValue(BUSTUB_INT32_MIN);
+          }
+
+          if (!(result->aggregates_[i].IsNull())) {
+            if (result->aggregates_[i].CompareLessThan(input.aggregates_[i]) == CmpBool::CmpTrue) {
+              result->aggregates_[i] = input.aggregates_[i];
+            }
+          }
           break;
       }
     }
@@ -181,7 +220,7 @@ class AggregationExecutor : public AbstractExecutor {
   auto MakeAggregateKey(const Tuple *tuple) -> AggregateKey {
     std::vector<Value> keys;
     for (const auto &expr : plan_->GetGroupBys()) {
-      keys.emplace_back(expr->Evaluate(tuple, child_->GetOutputSchema()));
+      keys.emplace_back(expr->Evaluate(tuple, child_executor_->GetOutputSchema()));
     }
     return {keys};
   }
@@ -189,8 +228,11 @@ class AggregationExecutor : public AbstractExecutor {
   /** @return The tuple as an AggregateValue */
   auto MakeAggregateValue(const Tuple *tuple) -> AggregateValue {
     std::vector<Value> vals;
+
+    if (tuple == nullptr) return {vals};
+
     for (const auto &expr : plan_->GetAggregates()) {
-      vals.emplace_back(expr->Evaluate(tuple, child_->GetOutputSchema()));
+      vals.emplace_back(expr->Evaluate(tuple, child_executor_->GetOutputSchema()));
     }
     return {vals};
   }
@@ -199,10 +241,13 @@ class AggregationExecutor : public AbstractExecutor {
   /** The aggregation plan node */
   const AggregationPlanNode *plan_;
   /** The child executor that produces tuples over which the aggregation is computed */
-  std::unique_ptr<AbstractExecutor> child_;
+  std::unique_ptr<AbstractExecutor> child_executor_;
   /** Simple aggregation hash table */
   // TODO(Student): Uncomment SimpleAggregationHashTable aht_;
+  std::unique_ptr<SimpleAggregationHashTable> aht_;
   /** Simple aggregation hash table iterator */
   // TODO(Student): Uncomment SimpleAggregationHashTable::Iterator aht_iterator_;
+  std::unique_ptr<SimpleAggregationHashTable::Iterator> aht_iterator_;
+  bool has_filled_;
 };
 }  // namespace bustub
