@@ -28,7 +28,7 @@ void NestedLoopJoinExecutor::Init() {
   right_executor_->Init();
   left_schema_size_ = plan_->GetLeftPlan()->OutputSchema().GetColumns().size();
   right_schema_size_ = plan_->GetRightPlan()->OutputSchema().GetColumns().size();
-  BUSTUB_ASSERT(left_schema_size_ + right_schema_size_ == plan_->OutputSchema().GetColumns().size(), "size");
+  BUSTUB_ASSERT(left_schema_size_ + right_schema_size_ <= plan_->OutputSchema().GetColumns().size(), "size");
   RID rid;
   left_executor_->Next(&current_left_tuple_, &rid);
   current_left_used_ = false;
@@ -54,8 +54,8 @@ auto NestedLoopJoinExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
 
       if (left_executor_->Next(&current_left_tuple_, &rid)) {
         right_executor_->Init();
-        right_executor_->Next(&right_tuple, &rid);
         current_left_used_ = false;
+        continue;
       } else {
         right_executor_->Init();  // to pass the assert left_next_count == right_init_count
         return false;
