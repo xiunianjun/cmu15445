@@ -44,6 +44,7 @@
 
 namespace bustub {
 
+// xiunian: a recursive function
 auto ExecutorFactory::CreateExecutor(ExecutorContext *exec_ctx, const AbstractPlanNodeRef &plan)
     -> std::unique_ptr<AbstractExecutor> {
   auto check_options_set = exec_ctx->GetCheckOptions()->check_options_set_;

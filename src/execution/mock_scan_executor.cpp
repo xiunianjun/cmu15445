@@ -22,10 +22,15 @@
 
 namespace bustub {
 
+// xiunian: it seems like the tas table has two col: ta_github_name and ta_day.
+// and this schema has two table, __mock_table_tas_2022 and __mock_table_tas_2023.
+
+// __mock_table_tas_2022
 static const char *ta_list_2022[] = {"amstqq",      "durovo",     "joyceliaoo", "karthik-ramanathan-3006",
                                      "kush789",     "lmwnshn",    "mkpjnx",     "skyzh",
                                      "thepinetree", "timlee0119", "yliang412"};
 
+// __mock_table_tas_2023
 static const char *ta_list_2023[] = {"abigalekim",      "arvinwu168", "christopherlim98", "David-Lyons", "fanyuex2",
                                      "Mayank-Baranwal", "skyzh",      "yarkhinephyo",     "yliang412"};
 
@@ -35,6 +40,7 @@ static const char *ta_oh_2022[] = {"Tuesday",   "Wednesday", "Monday",  "Wednesd
 static const char *ta_oh_2023[] = {"Friday",  "Thursday", "Tuesday",   "Monday",  "Tuesday",
                                    "Tuesday", "Randomly", "Wednesday", "Thursday"};
 
+// __mock_table_schedule_2022, __mock_table_schedule_2023
 static const char *course_on_date[] = {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"};
 
 const char *mock_table_list[] = {"__mock_table_1", "__mock_table_2", "__mock_table_3", "__mock_table_tas_2022",
@@ -50,6 +56,7 @@ const char *mock_table_list[] = {"__mock_table_1", "__mock_table_2", "__mock_tab
 
 static const int GRAPH_NODE_CNT = 10;
 
+// xiunian: get the schema of the table named @table
 auto GetMockTableSchemaOf(const std::string &table) -> Schema {
   if (table == "__mock_table_1") {
     return Schema{std::vector{{Column{"colA", TypeId::INTEGER}, {Column{"colB", TypeId::INTEGER}}}}};
@@ -116,6 +123,7 @@ auto GetMockTableSchemaOf(const std::string &table) -> Schema {
   throw bustub::Exception(fmt::format("mock table {} not found", table));
 }
 
+// xiunian: get sizeof table in this @plan
 auto GetSizeOf(const MockScanPlanNode *plan) -> size_t {
   const auto &table = plan->GetTable();
 
@@ -182,6 +190,7 @@ auto GetSizeOf(const MockScanPlanNode *plan) -> size_t {
   return 0;
 }
 
+// xiunian: todo
 auto GetShuffled(const MockScanPlanNode *plan) -> bool {
   const auto &table = plan->GetTable();
 
@@ -200,10 +209,12 @@ auto GetShuffled(const MockScanPlanNode *plan) -> bool {
   return false;
 }
 
+// xiunian: todo
 auto GetFunctionOf(const MockScanPlanNode *plan) -> std::function<Tuple(size_t)> {
   const auto &table = plan->GetTable();
 
   if (table == "__mock_table_1") {
+    // xiunian: the usage of std::function
     return [plan](size_t cursor) {
       std::vector<Value> values{};
       values.reserve(2);

@@ -37,10 +37,10 @@ auto HashJoinExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
     return false;
   }
 
+  // build the hash table
   if (!is_init_) {
     Tuple tuple;
     RID rid;
-    // the hashtable has not been built
     while (right_executor_->Next(&tuple, &rid)) {
       auto key = GetKeyFromExpressions(plan_->RightJoinKeyExpressions(), &tuple, plan_->GetRightPlan()->OutputSchema());
       auto it = ht_.find(key);
@@ -68,36 +68,34 @@ auto HashJoinExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
       insert_vals.push_back(current_left_tuple_.GetValue(&(plan_->GetLeftPlan()->OutputSchema()), i));
     }
 
+    // try to get the shrinked area
     auto key = GetKeyFromExpressions(plan_->LeftJoinKeyExpressions(), &current_left_tuple_, plan_->GetLeftPlan()->OutputSchema());
     auto it = ht_.find(key);
-    if (it == ht_.end() || cursor_right_ >= it->second.build_tuples_.size()) {  
-      uint64_t old_cursor = cursor_right_;
-      cursor_right_ = 0;
-
-      if (!(left_executor_->Next(&current_left_tuple_, &rid))) {
-        has_end_ = true;
-      }
-      
-      if ((old_cursor == 0) && (plan_->GetJoinType() == JoinType::LEFT)) {
-        // spawn a left join
-        std::vector<Value> tmp_vals;
-        for (uint32_t i = 0; i < plan_->GetRightPlan()->OutputSchema().GetColumns().size(); i++) {
-          tmp_vals.push_back(ValueFactory::GetNullValueByType(TypeId::INTEGER));
-        }
-        right_tuple = Tuple(tmp_vals, &(plan_->GetRightPlan()->OutputSchema()));
-        break;
-      }
-
-      if (has_end_) {
-        return false;
-      }
-
-      continue;
-    } else {
+    if (it != ht_.end() && cursor_right_ < it->second.build_tuples_.size()) {
       // spawn
       right_tuple = it->second.build_tuples_[cursor_right_ ++];
-
       break;
+    }
+
+    uint64_t old_cursor = cursor_right_;
+    cursor_right_ = 0;
+
+    if (!(left_executor_->Next(&current_left_tuple_, &rid))) {
+      has_end_ = true;
+    }
+    
+    if ((old_cursor == 0) && (plan_->GetJoinType() == JoinType::LEFT)) {
+      // spawn a left join
+      std::vector<Value> tmp_vals;
+      for (uint32_t i = 0; i < plan_->GetRightPlan()->OutputSchema().GetColumns().size(); i++) {
+        tmp_vals.push_back(ValueFactory::GetNullValueByType(TypeId::INTEGER));
+      }
+      right_tuple = Tuple(tmp_vals, &(plan_->GetRightPlan()->OutputSchema()));
+      break;
+    }
+
+    if (has_end_) {
+      return false;
     }
   }
 
