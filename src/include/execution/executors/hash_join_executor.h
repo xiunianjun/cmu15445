@@ -52,8 +52,24 @@ class HashJoinExecutor : public AbstractExecutor {
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); };
 
  private:
+  HashJoinKey GetKeyFromExpressions(const std::vector<AbstractExpressionRef> expressions, Tuple* tuple, Schema schema) {
+    std::vector<Value> keys;
+    for (auto exp : expressions) {
+      keys.push_back(exp->Evaluate(tuple, schema));
+    }
+    return {keys};
+  }
+
+
   /** The NestedLoopJoin plan node to be executed. */
   const HashJoinPlanNode *plan_;
+  std::unique_ptr<AbstractExecutor> left_executor_;
+  std::unique_ptr<AbstractExecutor> right_executor_;
+  Tuple current_left_tuple_;
+  bool is_init_;
+  bool has_end_;
+  uint64_t cursor_right_;
+  std::unordered_map<HashJoinKey, HashJoinValue> ht_{};
 };
 
 }  // namespace bustub

@@ -74,6 +74,10 @@ class Optimizer {
    */
   auto RewriteExpressionForJoin(const AbstractExpressionRef &expr, size_t left_column_cnt, size_t right_column_cnt)
       -> AbstractExpressionRef;
+    
+bool CheckIfEquiConjunction(const AbstractExpressionRef &expr, 
+     std::vector<AbstractExpressionRef>* left_key_expressions, 
+     std::vector<AbstractExpressionRef>* right_key_expressions);
 
   /** @brief check if the predicate is true::boolean */
   auto IsPredicateTrue(const AbstractExpressionRef &expr) -> bool;
