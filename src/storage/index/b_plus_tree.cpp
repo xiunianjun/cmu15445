@@ -1003,10 +1003,6 @@ auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE {
   guard = bpm_->FetchPageRead(header_page->root_page_id_);
   auto root = guard.As<InternalPage>();
 
-  if (root->GetSize() == 0) {
-    return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID);
-  }
-
   while (true) {
     if (root->IsLeafPage()) {
       return INDEXITERATOR_TYPE(bpm_, res_pgid);

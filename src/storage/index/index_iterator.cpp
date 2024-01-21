@@ -69,8 +69,8 @@ auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
     pgid_ = page->GetNextPageId();
     if (pgid_ != INVALID_PAGE_ID) {
       guard_ = bpm_->FetchPageRead(pgid_);
-      cnt_ = 0;
     }
+    cnt_ = 0;
   }
   return *this;
 }

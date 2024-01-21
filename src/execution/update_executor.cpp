@@ -17,9 +17,9 @@ namespace bustub {
 
 UpdateExecutor::UpdateExecutor(ExecutorContext *exec_ctx, const UpdatePlanNode *plan,
                                std::unique_ptr<AbstractExecutor> &&child_executor)
-    : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)), update_num_(0) {
+    : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)) {
   std::vector<Column> tmp_colum;
-  tmp_colum.push_back(Column("name", TypeId::INTEGER));
+  tmp_colum.emplace_back("name", TypeId::INTEGER);
   one_value_schema_ = new Schema(tmp_colum);
 }
 UpdateExecutor::~UpdateExecutor() { delete one_value_schema_; }
@@ -55,7 +55,7 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *param_tuple, RID *param_rid) -
 
     // insert again
     std::vector<Value> insert_values;
-    for (auto exp : plan_->target_expressions_) {
+    for (auto &exp : plan_->target_expressions_) {
       insert_values.push_back(exp->Evaluate(&tuple, table_info->schema_));
     }
     tuple = Tuple(insert_values, &(table_info->schema_));
