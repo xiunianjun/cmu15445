@@ -68,7 +68,6 @@ class TopNExecutor : public AbstractExecutor {
   std::unique_ptr<AbstractExecutor> child_executor_;
   std::unique_ptr<std::priority_queue<Tuple, std::vector<Tuple>, CompareTuplesByOrder>> heap_;
   std::vector<Tuple> tuples_;
-  bool is_init_;
 };
 
 }  // namespace bustub

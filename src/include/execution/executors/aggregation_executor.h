@@ -252,6 +252,6 @@ class AggregationExecutor : public AbstractExecutor {
   /** Simple aggregation hash table iterator */
   // TODO(Student): Uncomment SimpleAggregationHashTable::Iterator aht_iterator_;
   std::unique_ptr<SimpleAggregationHashTable::Iterator> aht_iterator_;
-  bool has_filled_{false};
 };
+
 }  // namespace bustub

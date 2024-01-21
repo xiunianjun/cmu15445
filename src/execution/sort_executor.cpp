@@ -8,24 +8,18 @@ SortExecutor::SortExecutor(ExecutorContext *exec_ctx, const SortPlanNode *plan,
 
 void SortExecutor::Init() {
   child_->Init();
-  is_init_ = false;
   cursor_ = 0;
-  tuples_.clear();
+
+  Tuple tuple;
+  RID rid;
+  while (child_->Next(&tuple, &rid)) {
+    tuples_.push_back(tuple);
+  }
+
+  std::sort(tuples_.begin(), tuples_.end(), CompareTuplesByOrder(GetOutputSchema(), plan_->GetOrderBy()));
 }
 
 auto SortExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
-  if (!is_init_) {
-    Tuple tuple;
-    RID rid;
-    while (child_->Next(&tuple, &rid)) {
-      tuples_.push_back(tuple);
-    }
-
-    std::sort(tuples_.begin(), tuples_.end(), CompareTuplesByOrder(GetOutputSchema(), plan_->GetOrderBy()));
-
-    is_init_ = true;
-  }
-
   if (cursor_ >= tuples_.size()) {
     return false;
   }

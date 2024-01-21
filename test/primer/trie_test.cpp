@@ -1,6 +1,6 @@
 #include <fmt/format.h>
-#include <cstdio>
 #include <bitset>
+#include <cstdio>
 #include <functional>
 #include <numeric>
 #include <optional>

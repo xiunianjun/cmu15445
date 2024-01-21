@@ -94,7 +94,6 @@ class SortExecutor : public AbstractExecutor {
   const SortPlanNode *plan_;
   std::unique_ptr<AbstractExecutor> child_;
   std::vector<Tuple> tuples_;
-  bool is_init_;
   uint64_t cursor_{0};
 };
 

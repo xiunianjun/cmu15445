@@ -10,28 +10,23 @@ void TopNExecutor::Init() {
   child_executor_->Init();
   CompareTuplesByOrder comparison_fn = CompareTuplesByOrder(GetOutputSchema(), plan_->GetOrderBy());
   heap_ = std::make_unique<std::priority_queue<Tuple, std::vector<Tuple>, CompareTuplesByOrder>>(comparison_fn);
-  is_init_ = false;
-  tuples_.clear();
+
+  Tuple tuple;
+  RID rid;
+  while (child_executor_->Next(&tuple, &rid)) {
+    heap_->push(tuple);
+    while (heap_->size() > plan_->GetN()) {
+      heap_->pop();
+    }
+  }
+
+  while (!(heap_->empty())) {
+    tuples_.push_back(heap_->top());
+    heap_->pop();
+  }
 }
 
 auto TopNExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
-  if (!is_init_) {
-    Tuple tuple;
-    RID rid;
-    while (child_executor_->Next(&tuple, &rid)) {
-      heap_->push(tuple);
-      while (heap_->size() > plan_->GetN()) {
-        heap_->pop();
-      }
-    }
-
-    while (!(heap_->empty())) {
-      tuples_.push_back(heap_->top());
-      heap_->pop();
-    }
-    is_init_ = true;
-  }
-
   if (tuples_.empty()) {
     return false;
   }

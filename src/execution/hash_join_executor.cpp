@@ -31,35 +31,28 @@ void HashJoinExecutor::Init() {
   if (!(left_executor_->Next(&current_left_tuple_, &rid))) {
     has_end_ = true;
   }
-  is_init_ = false;
   cursor_right_ = 0;
-  ht_.clear();
+
+  // build the hash table
+  Tuple tuple;
+  while (right_executor_->Next(&tuple, &rid)) {
+    auto key = GetKeyFromExpressions(plan_->RightJoinKeyExpressions(), &tuple, plan_->GetRightPlan()->OutputSchema());
+    auto it = ht_.find(key);
+    if (it != ht_.end()) {
+      it->second.build_tuples_.emplace_back(tuple);
+    } else {
+      HashJoinValue val;
+      std::vector<Tuple> tmp_vec;
+      tmp_vec.emplace_back(tuple);
+      val.build_tuples_ = std::move(tmp_vec);
+      ht_.insert(std::make_pair(key, std::move(val)));
+    }
+  }
 }
 
 auto HashJoinExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
   if (has_end_) {
     return false;
-  }
-
-  // build the hash table
-  if (!is_init_) {
-    Tuple tuple;
-    RID rid;
-    while (right_executor_->Next(&tuple, &rid)) {
-      auto key = GetKeyFromExpressions(plan_->RightJoinKeyExpressions(), &tuple, plan_->GetRightPlan()->OutputSchema());
-      auto it = ht_.find(key);
-      if (it != ht_.end()) {
-        it->second.build_tuples_.emplace_back(tuple);
-      } else {
-        HashJoinValue val;
-        std::vector<Tuple> tmp_vec;
-        tmp_vec.emplace_back(tuple);
-        val.build_tuples_ = std::move(tmp_vec);
-        ht_.insert(std::make_pair(key, std::move(val)));
-      }
-    }
-
-    is_init_ = true;
   }
 
   Tuple right_tuple;

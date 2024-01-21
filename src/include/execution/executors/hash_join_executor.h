@@ -120,7 +120,6 @@ class HashJoinExecutor : public AbstractExecutor {
   std::unique_ptr<AbstractExecutor> left_executor_;
   std::unique_ptr<AbstractExecutor> right_executor_;
   Tuple current_left_tuple_;
-  bool is_init_;
   bool has_end_;
   uint64_t cursor_right_{0};
   std::unordered_map<HashJoinKey, HashJoinValue> ht_{};
