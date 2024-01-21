@@ -42,7 +42,7 @@ class UpdateExecutor : public AbstractExecutor {
                  std::unique_ptr<AbstractExecutor> &&child_executor);
 
   ~UpdateExecutor();
-  
+
   /** Initialize the update */
   void Init() override;
 
@@ -67,6 +67,6 @@ class UpdateExecutor : public AbstractExecutor {
   /** The child executor to obtain value from */
   std::unique_ptr<AbstractExecutor> child_executor_;
   int16_t update_num_;
-  Schema* one_value_schema_;
+  Schema *one_value_schema_;
 };
 }  // namespace bustub

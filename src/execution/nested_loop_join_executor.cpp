@@ -20,8 +20,10 @@ namespace bustub {
 NestedLoopJoinExecutor::NestedLoopJoinExecutor(ExecutorContext *exec_ctx, const NestedLoopJoinPlanNode *plan,
                                                std::unique_ptr<AbstractExecutor> &&left_executor,
                                                std::unique_ptr<AbstractExecutor> &&right_executor)
-    : AbstractExecutor(exec_ctx), plan_(plan), left_executor_(std::move(left_executor)), right_executor_(std::move(right_executor)) {
-}
+    : AbstractExecutor(exec_ctx),
+      plan_(plan),
+      left_executor_(std::move(left_executor)),
+      right_executor_(std::move(right_executor)) {}
 
 void NestedLoopJoinExecutor::Init() {
   left_executor_->Init();
@@ -39,7 +41,6 @@ auto NestedLoopJoinExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
   RID rid;
   while (true) {
     if (right_executor_->Next(&right_tuple, &rid)) {
-      
     } else {
       if (!current_left_used_ && plan_->GetJoinType() == JoinType::LEFT) {
         std::vector<Value> tmp_vals;
@@ -56,18 +57,19 @@ auto NestedLoopJoinExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
         right_executor_->Init();
         current_left_used_ = false;
         continue;
-      } else {
-        right_executor_->Init();  // to pass the assert left_next_count == right_init_count
-        return false;
       }
+
+      right_executor_->Init();  // to pass the assert left_next_count == right_init_count
+      return false;
     }
 
-    if (plan_->Predicate()->EvaluateJoin(&current_left_tuple_, plan_->GetLeftPlan()->OutputSchema(), &right_tuple, plan_->GetRightPlan()->OutputSchema()).GetAs<bool>()) {
+    if (plan_->Predicate()
+            ->EvaluateJoin(&current_left_tuple_, plan_->GetLeftPlan()->OutputSchema(), &right_tuple,
+                           plan_->GetRightPlan()->OutputSchema())
+            .GetAs<bool>()) {
       current_left_used_ = true;
       break;
     }
-
-    continue;
   }
 
   std::vector<Value> tmp_vals;
@@ -79,7 +81,7 @@ auto NestedLoopJoinExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
   }
 
   *param_tuple = Tuple(tmp_vals, &(GetOutputSchema()));
-  
+
   return true;
 }
 

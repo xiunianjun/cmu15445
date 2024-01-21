@@ -4,7 +4,7 @@ namespace bustub {
 
 SortExecutor::SortExecutor(ExecutorContext *exec_ctx, const SortPlanNode *plan,
                            std::unique_ptr<AbstractExecutor> &&child_executor)
-    : AbstractExecutor(exec_ctx), plan_(plan), child_(std::move(child_executor)), cursor_(0) {}
+    : AbstractExecutor(exec_ctx), plan_(plan), child_(std::move(child_executor)) {}
 
 void SortExecutor::Init() {
   child_->Init();

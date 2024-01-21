@@ -22,9 +22,7 @@ UpdateExecutor::UpdateExecutor(ExecutorContext *exec_ctx, const UpdatePlanNode *
   tmp_colum.push_back(Column("name", TypeId::INTEGER));
   one_value_schema_ = new Schema(tmp_colum);
 }
-UpdateExecutor::~UpdateExecutor() {
-  delete one_value_schema_;
-}
+UpdateExecutor::~UpdateExecutor() { delete one_value_schema_; }
 
 void UpdateExecutor::Init() {
   // initialize
@@ -50,7 +48,9 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *param_tuple, RID *param_rid) -
     // update indexes
     auto indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_);
     for (auto index_info : indexes) {
-      index_info->index_->DeleteEntry(tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()), rid, exec_ctx_->GetTransaction());
+      index_info->index_->DeleteEntry(
+          tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()), rid,
+          exec_ctx_->GetTransaction());
     }
 
     // insert again
@@ -64,9 +64,11 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *param_tuple, RID *param_rid) -
     // update indexes
     indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_);
     for (auto index_info : indexes) {
-      index_info->index_->InsertEntry(tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()), rid, exec_ctx_->GetTransaction());
+      index_info->index_->InsertEntry(
+          tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()), rid,
+          exec_ctx_->GetTransaction());
     }
-    
+
     update_num_++;
   }
 

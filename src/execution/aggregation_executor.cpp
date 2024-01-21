@@ -18,7 +18,7 @@ namespace bustub {
 
 AggregationExecutor::AggregationExecutor(ExecutorContext *exec_ctx, const AggregationPlanNode *plan,
                                          std::unique_ptr<AbstractExecutor> &&child)
-    : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child)), has_filled_(false) { }
+    : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child)) {}
 
 void AggregationExecutor::Init() {
   // initialize
@@ -36,7 +36,7 @@ auto AggregationExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
       has_next = true;
       if (plan_->GetGroupBys().empty()) {
         AggregateKey agg_key;
-        agg_key.group_bys_.push_back(Value(TypeId::INTEGER, 1));
+        agg_key.group_bys_.emplace_back(TypeId::INTEGER, 1);
         aht_->InsertCombine(agg_key, MakeAggregateValue(&tuple));
       } else {
         aht_->InsertCombine(MakeAggregateKey(&tuple), MakeAggregateValue(&tuple));
@@ -44,9 +44,9 @@ auto AggregationExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
     }
 
     if (!has_next && plan_->GetGroupBys().empty()) {
-        AggregateKey agg_key;
-        agg_key.group_bys_.push_back(Value(TypeId::INTEGER, 1));
-        aht_->InsertCombine(agg_key, MakeAggregateValue(nullptr));
+      AggregateKey agg_key;
+      agg_key.group_bys_.emplace_back(TypeId::INTEGER, 1);
+      aht_->InsertCombine(agg_key, MakeAggregateValue(nullptr));
     }
 
     has_filled_ = true;
@@ -59,12 +59,12 @@ auto AggregationExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
 
   std::vector<Value> param_tuple_values;
   if (!(plan_->GetGroupBys().empty())) {
-    for (auto k : aht_iterator_->Key().group_bys_) {
+    for (auto &k : aht_iterator_->Key().group_bys_) {
       param_tuple_values.push_back(k);
     }
   }
 
-  for (auto v : aht_iterator_->Val().aggregates_) {
+  for (auto &v : aht_iterator_->Val().aggregates_) {
     param_tuple_values.push_back(v);
   }
 

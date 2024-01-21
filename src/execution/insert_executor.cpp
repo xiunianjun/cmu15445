@@ -18,15 +18,13 @@ namespace bustub {
 
 InsertExecutor::InsertExecutor(ExecutorContext *exec_ctx, const InsertPlanNode *plan,
                                std::unique_ptr<AbstractExecutor> &&child_executor)
-    : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)), insert_num_(0) {
-      std::vector<Column> tmp_colum;
-      tmp_colum.push_back(Column("name", TypeId::INTEGER));
-      one_value_schema_ = new Schema(tmp_colum);
-    }
-
-InsertExecutor::~InsertExecutor() {
-  delete one_value_schema_;
+    : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)) {
+  std::vector<Column> tmp_colum;
+  tmp_colum.emplace_back("name", TypeId::INTEGER);
+  one_value_schema_ = new Schema(tmp_colum);
 }
+
+InsertExecutor::~InsertExecutor() { delete one_value_schema_; }
 
 void InsertExecutor::Init() {
   // initialize
@@ -52,12 +50,14 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *param_tuple, RID *param_rid) -
     // update indexes
     auto indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_);
     for (auto index_info : indexes) {
-      index_info->index_->InsertEntry(tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()), rid, exec_ctx_->GetTransaction());
+      index_info->index_->InsertEntry(
+          tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()), rid,
+          exec_ctx_->GetTransaction());
     }
   }
 
   std::vector<Value> tmp_val;
-  tmp_val.push_back(Value(TypeId::INTEGER, insert_num_));
+  tmp_val.emplace_back(TypeId::INTEGER, insert_num_);
 
   *param_tuple = Tuple(tmp_val, one_value_schema_);
 

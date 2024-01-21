@@ -38,8 +38,8 @@ class DeleteExecutor : public AbstractExecutor {
   DeleteExecutor(ExecutorContext *exec_ctx, const DeletePlanNode *plan,
                  std::unique_ptr<AbstractExecutor> &&child_executor);
 
-  ~DeleteExecutor();
-  
+  ~DeleteExecutor() override;
+
   /** Initialize the delete */
   void Init() override;
 
@@ -62,7 +62,7 @@ class DeleteExecutor : public AbstractExecutor {
   const DeletePlanNode *plan_;
   /** The child executor from which RIDs for deleted tuples are pulled */
   std::unique_ptr<AbstractExecutor> child_executor_;
-  int16_t delete_num_;
-  Schema* one_value_schema_;
+  int16_t delete_num_{0};
+  Schema *one_value_schema_;
 };
 }  // namespace bustub

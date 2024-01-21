@@ -13,8 +13,7 @@
 
 namespace bustub {
 IndexScanExecutor::IndexScanExecutor(ExecutorContext *exec_ctx, const IndexScanPlanNode *plan)
-    : AbstractExecutor(exec_ctx), plan_(plan), is_end_(false) {
-    }
+    : AbstractExecutor(exec_ctx), plan_(plan) {}
 
 void IndexScanExecutor::Init() {
   is_end_ = false;
@@ -25,28 +24,33 @@ void IndexScanExecutor::Init() {
   auto iterator = tree_->GetBeginIterator();
   if (!(iterator.IsEnd())) {
     next_key_ = (*iterator).first;
-  }
-  else {
+  } else {
     is_end_ = true;
   }
 }
 
 auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-  if (is_end_) {
-    return false;
-  }
+  TupleMeta tuple_meta;
+  do {
+    if (is_end_) {
+      return false;
+    }
 
-  auto iterator = tree_->GetBeginIterator(next_key_);
-  auto table_heap = table_info_->table_.get();
+    auto iterator = tree_->GetBeginIterator(next_key_);
+    auto table_heap = table_info_->table_.get();
 
-  *rid = (*iterator).second;
-  *tuple = table_heap->GetTuple(*rid).second;
+    *rid = (*iterator).second;
+    auto tuple_pair = table_heap->GetTuple(*rid);
+    *tuple = tuple_pair.second;
+    tuple_meta = tuple_pair.first;
 
-  ++iterator;
-  if (!(iterator.IsEnd()))
-    next_key_ = (*iterator).first;
-  else
-    is_end_ = true;
+    ++iterator;
+    if (!(iterator.IsEnd())) {
+      next_key_ = (*iterator).first;
+    } else {
+      is_end_ = true;
+    }
+  } while (tuple_meta.is_deleted_);
 
   return true;
 }

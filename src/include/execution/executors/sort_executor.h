@@ -55,7 +55,7 @@ class SortExecutor : public AbstractExecutor {
   std::unique_ptr<AbstractExecutor> child_;
   std::vector<Tuple> tuples_;
   bool is_init_;
-  uint64_t cursor_;
+  uint64_t cursor_{0};
 };
 
 }  // namespace bustub

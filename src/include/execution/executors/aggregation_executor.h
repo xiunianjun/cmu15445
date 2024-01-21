@@ -71,7 +71,9 @@ class SimpleAggregationHashTable {
    * @param input The input value
    */
   void CombineAggregateValues(AggregateValue *result, const AggregateValue &input) {
-    if (input.aggregates_.empty())  return;
+    if (input.aggregates_.empty()) {
+      return;
+    }
 
     BUSTUB_ASSERT(!(result->aggregates_.empty()), "Param result must be initiallized!");
     for (uint32_t i = 0; i < agg_exprs_.size(); i++) {
@@ -82,7 +84,7 @@ class SimpleAggregationHashTable {
         case AggregationType::CountAggregate:
           if (!(input.aggregates_[i].IsNull())) {
             if (result->aggregates_[i].IsNull()) {
-               result->aggregates_[i] = ValueFactory::GetIntegerValue(0);
+              result->aggregates_[i] = ValueFactory::GetIntegerValue(0);
             }
             result->aggregates_[i] = result->aggregates_[i].Add(Value(TypeId::INTEGER, 1));
           }
@@ -90,7 +92,7 @@ class SimpleAggregationHashTable {
         case AggregationType::SumAggregate:
           if (!(input.aggregates_[i].IsNull())) {
             if (result->aggregates_[i].IsNull()) {
-                result->aggregates_[i] = ValueFactory::GetIntegerValue(0);
+              result->aggregates_[i] = ValueFactory::GetIntegerValue(0);
             }
 
             result->aggregates_[i] = result->aggregates_[i].Add(input.aggregates_[i]);
@@ -98,7 +100,7 @@ class SimpleAggregationHashTable {
           break;
         case AggregationType::MinAggregate:
           if (result->aggregates_[i].IsNull()) {
-              result->aggregates_[i] = ValueFactory::GetIntegerValue(BUSTUB_INT32_MAX);
+            result->aggregates_[i] = ValueFactory::GetIntegerValue(BUSTUB_INT32_MAX);
           }
 
           if (!(result->aggregates_[i].IsNull())) {
@@ -109,7 +111,7 @@ class SimpleAggregationHashTable {
           break;
         case AggregationType::MaxAggregate:
           if (result->aggregates_[i].IsNull()) {
-              result->aggregates_[i] = ValueFactory::GetIntegerValue(BUSTUB_INT32_MIN);
+            result->aggregates_[i] = ValueFactory::GetIntegerValue(BUSTUB_INT32_MIN);
           }
 
           if (!(result->aggregates_[i].IsNull())) {
@@ -229,7 +231,9 @@ class AggregationExecutor : public AbstractExecutor {
   auto MakeAggregateValue(const Tuple *tuple) -> AggregateValue {
     std::vector<Value> vals;
 
-    if (tuple == nullptr) return {vals};
+    if (tuple == nullptr) {
+      return {vals};
+    }
 
     for (const auto &expr : plan_->GetAggregates()) {
       vals.emplace_back(expr->Evaluate(tuple, child_executor_->GetOutputSchema()));
@@ -248,6 +252,6 @@ class AggregationExecutor : public AbstractExecutor {
   /** Simple aggregation hash table iterator */
   // TODO(Student): Uncomment SimpleAggregationHashTable::Iterator aht_iterator_;
   std::unique_ptr<SimpleAggregationHashTable::Iterator> aht_iterator_;
-  bool has_filled_;
+  bool has_filled_{false};
 };
 }  // namespace bustub

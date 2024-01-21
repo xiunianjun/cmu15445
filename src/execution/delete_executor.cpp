@@ -18,14 +18,12 @@ namespace bustub {
 
 DeleteExecutor::DeleteExecutor(ExecutorContext *exec_ctx, const DeletePlanNode *plan,
                                std::unique_ptr<AbstractExecutor> &&child_executor)
-    : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)), delete_num_(0) {
+    : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)) {
   std::vector<Column> tmp_colum;
-  tmp_colum.push_back(Column("name", TypeId::INTEGER));
+  tmp_colum.emplace_back("name", TypeId::INTEGER);
   one_value_schema_ = new Schema(tmp_colum);
 }
-DeleteExecutor::~DeleteExecutor() {
-  delete one_value_schema_;
-}
+DeleteExecutor::~DeleteExecutor() { delete one_value_schema_; }
 
 void DeleteExecutor::Init() {
   // initialize
@@ -51,14 +49,16 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *param_tuple, RID *param_rid) -
     // update indexes
     auto indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_);
     for (auto index_info : indexes) {
-      index_info->index_->DeleteEntry(tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()), rid, exec_ctx_->GetTransaction());
+      index_info->index_->DeleteEntry(
+          tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()), rid,
+          exec_ctx_->GetTransaction());
     }
-    
+
     delete_num_++;
   }
 
   std::vector<Value> tmp_val;
-  tmp_val.push_back(Value(TypeId::INTEGER, delete_num_));
+  tmp_val.emplace_back(TypeId::INTEGER, delete_num_);
 
   *param_tuple = Tuple(tmp_val, one_value_schema_);
 

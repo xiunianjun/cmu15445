@@ -60,4 +60,43 @@ class SortPlanNode : public AbstractPlanNode {
   auto PlanNodeToString() const -> std::string override;
 };
 
+struct CompareTuplesByOrder {
+  std::shared_ptr<Schema> schema_;
+  std::vector<std::pair<OrderByType, AbstractExpressionRef>> order_bys_;
+
+  CompareTuplesByOrder(const Schema &schema,
+                       const std::vector<std::pair<OrderByType, AbstractExpressionRef>> &order_by) {
+    for (auto &o : order_by) {
+      order_bys_.push_back(o);
+    }
+
+    schema_ = std::make_shared<Schema>(schema);
+  }
+
+  // if t1 == t2, t1 always orders before t2
+  auto operator()(const Tuple &t1, const Tuple &t2) const -> bool {
+    // in order of priority
+    for (auto &order : order_bys_) {
+      if (order.first == OrderByType::INVALID) {
+        continue;
+      }
+
+      auto v1 = order.second->Evaluate(&t1, *schema_);
+      auto v2 = order.second->Evaluate(&t2, *schema_);
+
+      if (v1.CompareEquals(v2) == CmpBool::CmpTrue) {
+        continue;
+      }
+
+      if (order.first == OrderByType::DESC) {
+        return v1.CompareGreaterThanEquals(v2) == CmpBool::CmpTrue;
+      }
+
+      return v1.CompareLessThanEquals(v2) == CmpBool::CmpTrue;
+    }
+
+    return true;
+  }
+};
+
 }  // namespace bustub

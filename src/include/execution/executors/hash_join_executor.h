@@ -13,7 +13,9 @@
 #pragma once
 
 #include <memory>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
@@ -52,14 +54,15 @@ class HashJoinExecutor : public AbstractExecutor {
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); };
 
  private:
-  HashJoinKey GetKeyFromExpressions(const std::vector<AbstractExpressionRef> expressions, Tuple* tuple, Schema schema) {
+  auto GetKeyFromExpressions(const std::vector<AbstractExpressionRef> &expressions, Tuple *tuple, const Schema &schema)
+      -> HashJoinKey {
     std::vector<Value> keys;
-    for (auto exp : expressions) {
+    keys.reserve(expressions.size());
+    for (auto &exp : expressions) {
       keys.push_back(exp->Evaluate(tuple, schema));
     }
     return {keys};
   }
-
 
   /** The NestedLoopJoin plan node to be executed. */
   const HashJoinPlanNode *plan_;
@@ -68,7 +71,7 @@ class HashJoinExecutor : public AbstractExecutor {
   Tuple current_left_tuple_;
   bool is_init_;
   bool has_end_;
-  uint64_t cursor_right_;
+  uint64_t cursor_right_{0};
   std::unordered_map<HashJoinKey, HashJoinValue> ht_{};
 };
 

@@ -18,7 +18,10 @@ namespace bustub {
 HashJoinExecutor::HashJoinExecutor(ExecutorContext *exec_ctx, const HashJoinPlanNode *plan,
                                    std::unique_ptr<AbstractExecutor> &&left_child,
                                    std::unique_ptr<AbstractExecutor> &&right_child)
-    : AbstractExecutor(exec_ctx), plan_(plan), left_executor_(std::move(left_child)), right_executor_(std::move(right_child)), cursor_right_(0) { }
+    : AbstractExecutor(exec_ctx),
+      plan_(plan),
+      left_executor_(std::move(left_child)),
+      right_executor_(std::move(right_child)) {}
 
 void HashJoinExecutor::Init() {
   left_executor_->Init();
@@ -30,6 +33,7 @@ void HashJoinExecutor::Init() {
   }
   is_init_ = false;
   cursor_right_ = 0;
+  ht_.clear();
 }
 
 auto HashJoinExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
@@ -45,11 +49,11 @@ auto HashJoinExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
       auto key = GetKeyFromExpressions(plan_->RightJoinKeyExpressions(), &tuple, plan_->GetRightPlan()->OutputSchema());
       auto it = ht_.find(key);
       if (it != ht_.end()) {
-        it->second.build_tuples_.push_back(Tuple(tuple));
+        it->second.build_tuples_.emplace_back(tuple);
       } else {
         HashJoinValue val;
         std::vector<Tuple> tmp_vec;
-        tmp_vec.push_back(Tuple(tuple));
+        tmp_vec.emplace_back(tuple);
         val.build_tuples_ = std::move(tmp_vec);
         ht_.insert(std::make_pair(key, std::move(val)));
       }
@@ -69,11 +73,12 @@ auto HashJoinExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
     }
 
     // try to get the shrinked area
-    auto key = GetKeyFromExpressions(plan_->LeftJoinKeyExpressions(), &current_left_tuple_, plan_->GetLeftPlan()->OutputSchema());
+    auto key = GetKeyFromExpressions(plan_->LeftJoinKeyExpressions(), &current_left_tuple_,
+                                     plan_->GetLeftPlan()->OutputSchema());
     auto it = ht_.find(key);
     if (it != ht_.end() && cursor_right_ < it->second.build_tuples_.size()) {
       // spawn
-      right_tuple = it->second.build_tuples_[cursor_right_ ++];
+      right_tuple = it->second.build_tuples_[cursor_right_++];
       break;
     }
 
@@ -83,7 +88,7 @@ auto HashJoinExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
     if (!(left_executor_->Next(&current_left_tuple_, &rid))) {
       has_end_ = true;
     }
-    
+
     if ((old_cursor == 0) && (plan_->GetJoinType() == JoinType::LEFT)) {
       // spawn a left join
       std::vector<Value> tmp_vals;
@@ -104,7 +109,7 @@ auto HashJoinExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
   }
 
   *param_tuple = Tuple(insert_vals, &(GetOutputSchema()));
-  
+
   return true;
 }
 

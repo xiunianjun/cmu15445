@@ -5,9 +5,9 @@
 #include "common/exception.h"
 #include "common/macros.h"
 #include "execution/expressions/column_value_expression.h"
-#include "execution/expressions/logic_expression.h"
 #include "execution/expressions/comparison_expression.h"
 #include "execution/expressions/constant_value_expression.h"
+#include "execution/expressions/logic_expression.h"
 #include "execution/plans/abstract_plan.h"
 #include "execution/plans/filter_plan.h"
 #include "execution/plans/hash_join_plan.h"
@@ -18,9 +18,9 @@
 
 namespace bustub {
 
-bool Optimizer::CheckIfEquiConjunction(const AbstractExpressionRef &expr, 
-                std::vector<AbstractExpressionRef>* left_key_expressions, 
-                std::vector<AbstractExpressionRef>* right_key_expressions) {
+bool Optimizer::CheckIfEquiConjunction(const AbstractExpressionRef &expr,
+                                       std::vector<AbstractExpressionRef> *left_key_expressions,
+                                       std::vector<AbstractExpressionRef> *right_key_expressions) {
   // check child first
   for (const auto &child : expr->GetChildren()) {
     bool res = CheckIfEquiConjunction(child, left_key_expressions, right_key_expressions);
@@ -34,9 +34,11 @@ bool Optimizer::CheckIfEquiConjunction(const AbstractExpressionRef &expr,
       column_value_expr != nullptr) {
     BUSTUB_ASSERT(column_value_expr->GetTupleIdx() <= 1, "the column expr tuple idx must be 0 or 1.");
     if (column_value_expr->GetTupleIdx() == 0) {
-      left_key_expressions->push_back(std::make_shared<ColumnValueExpression>(column_value_expr->GetTupleIdx(), column_value_expr->GetColIdx(), column_value_expr->GetReturnType()));
+      left_key_expressions->push_back(std::make_shared<ColumnValueExpression>(
+          column_value_expr->GetTupleIdx(), column_value_expr->GetColIdx(), column_value_expr->GetReturnType()));
     } else {
-      right_key_expressions->push_back(std::make_shared<ColumnValueExpression>(column_value_expr->GetTupleIdx(), column_value_expr->GetColIdx(), column_value_expr->GetReturnType()));
+      right_key_expressions->push_back(std::make_shared<ColumnValueExpression>(
+          column_value_expr->GetTupleIdx(), column_value_expr->GetColIdx(), column_value_expr->GetReturnType()));
     }
     return true;
   }
@@ -62,7 +64,7 @@ auto Optimizer::OptimizeNLJAsHashJoin(const AbstractPlanNodeRef &plan) -> Abstra
   // Note for 2023 Spring: You should at least support join keys of the form:
   // 1. <column expr> = <column expr>
   // 2. <column expr> = <column expr> AND <column expr> = <column expr>
-  
+
   // do for its child first, from buttom to up
   std::vector<AbstractPlanNodeRef> children;
   for (const auto &child : plan->GetChildren()) {
@@ -79,11 +81,9 @@ auto Optimizer::OptimizeNLJAsHashJoin(const AbstractPlanNodeRef &plan) -> Abstra
     std::vector<AbstractExpressionRef> right_key_expressions;
     if (CheckIfEquiConjunction(nlj_plan.Predicate(), &left_key_expressions, &right_key_expressions)) {
       // swicth to a hash join
-      return std::make_shared<HashJoinPlanNode>(
-          nlj_plan.output_schema_, nlj_plan.GetLeftPlan(), nlj_plan.GetRightPlan(),
-          std::move(left_key_expressions),
-          std::move(right_key_expressions),
-          nlj_plan.GetJoinType());
+      return std::make_shared<HashJoinPlanNode>(nlj_plan.output_schema_, nlj_plan.GetLeftPlan(),
+                                                nlj_plan.GetRightPlan(), std::move(left_key_expressions),
+                                                std::move(right_key_expressions), nlj_plan.GetJoinType());
     }
   }
   return optimized_plan;
