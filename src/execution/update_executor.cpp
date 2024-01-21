@@ -73,7 +73,7 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *param_tuple, RID *param_rid) -
   }
 
   std::vector<Value> tmp_val;
-  tmp_val.push_back(Value(TypeId::INTEGER, update_num_));
+  tmp_val.emplace_back(TypeId::INTEGER, update_num_);
 
   *param_tuple = Tuple(tmp_val, one_value_schema_);
 

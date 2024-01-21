@@ -18,14 +18,16 @@
 
 namespace bustub {
 
-bool Optimizer::CheckIfEquiConjunction(const AbstractExpressionRef &expr,
+auto Optimizer::CheckIfEquiConjunction(const AbstractExpressionRef &expr,
                                        std::vector<AbstractExpressionRef> *left_key_expressions,
-                                       std::vector<AbstractExpressionRef> *right_key_expressions) {
+                                       std::vector<AbstractExpressionRef> *right_key_expressions) -> bool {
   // check child first
   for (const auto &child : expr->GetChildren()) {
     bool res = CheckIfEquiConjunction(child, left_key_expressions, right_key_expressions);
     // if one child invalid, than the whole expr invalid
-    if (!res) return false;
+    if (!res) {
+      return false;
+    }
   }
 
   // then check current node

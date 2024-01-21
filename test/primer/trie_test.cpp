@@ -1,5 +1,5 @@
 #include <fmt/format.h>
-#include <stdio.h>
+#include <cstdio>
 #include <bitset>
 #include <functional>
 #include <numeric>
