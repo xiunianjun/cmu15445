@@ -22,6 +22,16 @@ INDEXITERATOR_TYPE::IndexIterator(INDEXITERATOR_TYPE &it) : bpm_(it.bpm_), pgid_
 }
 
 INDEX_TEMPLATE_ARGUMENTS
+INDEXITERATOR_TYPE::IndexIterator(INDEXITERATOR_TYPE &&it) noexcept
+    : bpm_(it.bpm_), pgid_(it.pgid_), cnt_(it.cnt_) {
+  if (pgid_ != INVALID_PAGE_ID) {
+    guard_ = bpm_->FetchPageRead(pgid_);
+  }
+  // Set the source iterator's pgid to INVALID_PAGE_ID to indicate it's moved-from state
+  it.pgid_ = INVALID_PAGE_ID;
+}
+
+INDEX_TEMPLATE_ARGUMENTS
 INDEXITERATOR_TYPE::IndexIterator(BufferPoolManager *bpm, page_id_t pgid, int cnt) : bpm_(bpm), pgid_(pgid), cnt_(cnt) {
   if (pgid_ != INVALID_PAGE_ID) {
     guard_ = bpm_->FetchPageRead(pgid_);
