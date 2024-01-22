@@ -64,6 +64,11 @@ class Optimizer {
   auto OptimizeMergeFilterScan(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
 
   /**
+   * @brief change sequence scan to index scan
+   */
+  auto OptimizeSeqscanAsIndexScan(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
+
+  /**
    * @brief rewrite expression to be used in nested loop joins. e.g., if we have `SELECT * FROM a, b WHERE a.x = b.y`,
    * we will have `#0.x = #0.y` in the filter plan node. We will need to figure out where does `0.x` and `0.y` belong
    * in NLJ (left table or right table?), and rewrite it as `#0.x = #1.y`.
@@ -78,6 +83,9 @@ class Optimizer {
   auto CheckIfEquiConjunction(const AbstractExpressionRef &expr,
                               std::vector<AbstractExpressionRef> *left_key_expressions,
                               std::vector<AbstractExpressionRef> *right_key_expressions) -> bool;
+
+  auto CheckIfColumnConstantConjunction(const AbstractExpressionRef &expr, std::vector<uint32_t> *column_indexes,
+                                        std::vector<Value> *first_values, std::vector<Value> *last_values) -> bool;
 
   /** @brief check if the predicate is true::boolean */
   auto IsPredicateTrue(const AbstractExpressionRef &expr) -> bool;

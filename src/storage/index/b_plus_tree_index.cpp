@@ -55,7 +55,10 @@ INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_INDEX_TYPE::GetBeginIterator() -> INDEXITERATOR_TYPE { return container_->Begin(); }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_INDEX_TYPE::GetBeginIterator(const KeyType &key) -> INDEXITERATOR_TYPE { return container_->Begin(key); }
+auto BPLUSTREE_INDEX_TYPE::GetBeginIterator(const KeyType &key, bool is_ambiguous, bool is_end_ambiguous)
+    -> INDEXITERATOR_TYPE {
+  return container_->Begin(key, is_ambiguous, is_end_ambiguous);
+}
 
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_INDEX_TYPE::GetEndIterator() -> INDEXITERATOR_TYPE { return container_->End(); }

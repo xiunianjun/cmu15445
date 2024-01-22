@@ -59,7 +59,7 @@ class InsertExecutor : public AbstractExecutor {
   /** The insert plan node to be executed*/
   const InsertPlanNode *plan_;
   std::unique_ptr<AbstractExecutor> child_executor_;
-  int16_t insert_num_{0};
+  int32_t insert_num_{0};
   Schema *one_value_schema_;
 };
 

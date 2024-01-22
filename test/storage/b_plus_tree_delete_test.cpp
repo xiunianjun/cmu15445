@@ -60,6 +60,8 @@ TEST(BPlusTreeTests, DeleteTest1) {
     int64_t value = key & 0xFFFFFFFF;
     EXPECT_EQ(rids[0].GetSlotNum(), value);
   }
+  tree.Print(bpm);
+  printf("---------------------\n");
   // tree.Draw(bpm, "btree.dot");
 
   std::vector<int64_t> remove_keys = {1, 5};
@@ -70,6 +72,15 @@ TEST(BPlusTreeTests, DeleteTest1) {
     // sprintf(buf, "trees/tree_%ld.dot", key);
     // tree.Draw(bpm, buf);
   }
+
+  tree.Print(bpm);
+
+  printf("slot num: \n");
+  for (auto iterator = tree.Begin(); iterator != tree.End(); ++iterator) {
+    auto location = (*iterator).second;
+    printf("%d\t", location.GetSlotNum());
+  }
+  printf("\n");
 
   int64_t size = 0;
   bool is_present;

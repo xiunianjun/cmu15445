@@ -26,8 +26,8 @@ class IndexIterator {
  public:
   // you may define your own constructor based on your member variables
   IndexIterator();
-  IndexIterator(INDEXITERATOR_TYPE &it);  // NOLINT
-  IndexIterator(INDEXITERATOR_TYPE &&it) noexcept;
+  IndexIterator(INDEXITERATOR_TYPE &it);            // NOLINT
+  IndexIterator(INDEXITERATOR_TYPE &&it) noexcept;  // NOLINT
   IndexIterator(BufferPoolManager *bpm, page_id_t pgid);
   IndexIterator(BufferPoolManager *bpm, page_id_t pgid, int cnt);
   ~IndexIterator();  // NOLINT
@@ -47,7 +47,6 @@ class IndexIterator {
   BufferPoolManager *bpm_;
   page_id_t pgid_;
   int cnt_ = 0;
-  ReadPageGuard guard_;
 };
 
 }  // namespace bustub

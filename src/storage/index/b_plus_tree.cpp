@@ -1024,12 +1024,43 @@ auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE {
  * @return : index iterator
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE {
-  auto it = Begin();
-  while (!(it.IsEnd() || comparator_((*it).first, key) == 0)) {
-    ++it;
+auto BPLUSTREE_TYPE::Begin(const KeyType &key, bool is_ambiguous, bool is_end_ambiguous) -> INDEXITERATOR_TYPE {
+  // get root page
+  ReadPageGuard guard = bpm_->FetchPageRead(header_page_id_);
+  auto header_page = guard.As<BPlusTreeHeaderPage>();
+  auto res_pgid = header_page->root_page_id_;
+  if (header_page->root_page_id_ == INVALID_PAGE_ID) {
+    return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID);
   }
-  return it;
+
+  guard = bpm_->FetchPageRead(header_page->root_page_id_);
+  auto root = guard.As<InternalPage>();
+
+  while (true) {
+    if (root->IsLeafPage()) {
+      if (is_ambiguous) {
+        if (is_end_ambiguous) {
+          auto *leaf = reinterpret_cast<const LeafPage *>(root);
+          return INDEXITERATOR_TYPE(bpm_, leaf->GetNextPageId());
+        } else {
+          return INDEXITERATOR_TYPE(bpm_, res_pgid);
+        }
+      }
+
+      auto it = INDEXITERATOR_TYPE(bpm_, res_pgid);
+      while (!(it.IsEnd() || comparator_((*it).first, key) == 0)) {
+        ++it;
+      }
+      return INDEXITERATOR_TYPE(it);
+    }
+
+    int index = BinarySearchInternal(root, 1, root->GetSize(), key, true);
+    guard = bpm_->FetchPageRead(root->ValueAt(index - 1));
+    res_pgid = root->ValueAt(index - 1);
+    root = guard.As<InternalPage>();  // goto most right child
+  }
+
+  return INDEXITERATOR_TYPE(bpm_, INVALID_PAGE_ID);
 }
 
 /*

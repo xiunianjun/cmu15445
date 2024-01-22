@@ -22,8 +22,10 @@ void SeqScanExecutor::Init() {
       std::make_unique<TableIterator>(exec_ctx_->GetCatalog()->GetTable(plan_->GetTableOid())->table_->MakeIterator());
 }
 
-auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
+auto SeqScanExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
   TupleMeta tuple_meta;
+  Tuple tuple;
+  RID rid;
   do {
     if (table_iterator_->IsEnd()) {
       return EXECUTOR_EXHAUSTED;
@@ -31,11 +33,14 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
 
     auto tuple_pair = table_iterator_->GetTuple();
     tuple_meta = tuple_pair.first;
-    *tuple = tuple_pair.second;
-    *rid = table_iterator_->GetRID();
+    tuple = tuple_pair.second;
+    rid = table_iterator_->GetRID();
     ++(*table_iterator_);
-  } while (tuple_meta.is_deleted_);
+  } while (tuple_meta.is_deleted_ ||
+           (plan_->Predicate() != nullptr && !(plan_->Predicate()->Evaluate(&tuple, GetOutputSchema()).GetAs<bool>())));
 
+  *param_tuple = tuple;
+  *param_rid = rid;
   return EXECUTOR_ACTIVE;
 }
 

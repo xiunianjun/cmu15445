@@ -43,7 +43,6 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *param_tuple, RID *param_rid) -
   Tuple tuple;
   RID rid;
   while (child_executor_->Next(&tuple, &rid)) {
-    // std::cout << "insert tuple: " << tuple.ToString(&(plan_->GetChildPlan()->OutputSchema())) << std::endl;
     rid = table_heap->InsertTuple(TupleMeta(), tuple).value();
     insert_num_++;
 

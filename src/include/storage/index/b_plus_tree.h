@@ -121,7 +121,7 @@ class BPlusTree {
 
   auto End() -> INDEXITERATOR_TYPE;
 
-  auto Begin(const KeyType &key) -> INDEXITERATOR_TYPE;
+  auto Begin(const KeyType &key, bool is_ambiguous = false, bool is_end_ambiguous = false) -> INDEXITERATOR_TYPE;
 
   // Print the B+ tree
   void Print(BufferPoolManager *bpm);

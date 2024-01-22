@@ -41,6 +41,8 @@ class SeqScanPlanNode : public AbstractPlanNode {
         table_name_(std::move(table_name)),
         filter_predicate_(std::move(filter_predicate)) {}
 
+  auto Predicate() const -> const AbstractExpressionRef & { return filter_predicate_; }
+
   /** @return The type of the plan node */
   auto GetType() const -> PlanType override { return PlanType::SeqScan; }
 
