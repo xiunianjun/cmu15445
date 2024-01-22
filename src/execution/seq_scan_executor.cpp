@@ -36,8 +36,8 @@ auto SeqScanExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
     tuple = tuple_pair.second;
     rid = table_iterator_->GetRID();
     ++(*table_iterator_);
-  } while (tuple_meta.is_deleted_ ||
-           (plan_->Predicate() != nullptr && !(plan_->Predicate()->Evaluate(&tuple, GetOutputSchema()).GetAs<bool>())));
+  } while (tuple_meta.is_deleted_ || (plan_->filter_predicate_ != nullptr &&
+                                      !(plan_->filter_predicate_->Evaluate(&tuple, GetOutputSchema()).GetAs<bool>())));
 
   *param_tuple = tuple;
   *param_rid = rid;

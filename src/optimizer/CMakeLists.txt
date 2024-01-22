@@ -11,8 +11,7 @@ add_library(
         optimizer_custom_rules.cpp
         optimizer_internal.cpp
         order_by_index_scan.cpp
-        sort_limit_as_topn.cpp
-        seqscan_as_index_scan.cpp)
+        sort_limit_as_topn.cpp)
 
 set(ALL_OBJECT_FILES
         ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:bustub_optimizer>

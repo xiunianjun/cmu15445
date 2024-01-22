@@ -1042,9 +1042,9 @@ auto BPLUSTREE_TYPE::Begin(const KeyType &key, bool is_ambiguous, bool is_end_am
         if (is_end_ambiguous) {
           auto *leaf = reinterpret_cast<const LeafPage *>(root);
           return INDEXITERATOR_TYPE(bpm_, leaf->GetNextPageId());
-        } else {
-          return INDEXITERATOR_TYPE(bpm_, res_pgid);
         }
+
+        return INDEXITERATOR_TYPE(bpm_, res_pgid);
       }
 
       auto it = INDEXITERATOR_TYPE(bpm_, res_pgid);
