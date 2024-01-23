@@ -7,6 +7,7 @@
 #include "execution/plans/filter_plan.h"
 #include "execution/plans/index_scan_plan.h"
 #include "execution/plans/limit_plan.h"
+#include "execution/plans/nested_loop_join_plan.h"
 #include "execution/plans/seq_scan_plan.h"
 #include "execution/plans/sort_plan.h"
 #include "execution/plans/topn_plan.h"
@@ -159,6 +160,200 @@ auto Optimizer::OptimizeSeqscanAsIndexScan(const AbstractPlanNodeRef &plan) -> A
     }
   }
   return optimized_plan;
+}
+
+void Optimizer::SplitExpression(const AbstractExpressionRef &expr,
+                                std::vector<AbstractExpressionRef> *child_expressions, AbstractExpressionRef *middle,
+                                int left_size, int right_size) {
+  // if is "AND"
+  if (const auto *logic_expr = dynamic_cast<const LogicExpression *>(expr.get());
+      logic_expr != nullptr && logic_expr->logic_type_ == LogicType::And) {
+    // splite children
+    for (auto &child : expr->GetChildren()) {
+      SplitExpression(child, child_expressions, middle, left_size, right_size);
+    }
+    // std::all_of(expr->GetChildren().begin(), expr->GetChildren().end(),
+    //     [this, child_expressions, middle, left_size, right_size](const AbstractExpressionRef &child) {
+    //       SplitExpression(child, child_expressions, middle, left_size, right_size);
+    //       return true;
+    //     });
+    return;
+  }
+
+  // if is the comparison expr
+  if (auto *comparison_expr = dynamic_cast<const ComparisonExpression *>(expr.get()); comparison_expr != nullptr) {
+    BUSTUB_ASSERT(comparison_expr->GetChildren().size() == 2, "Comparison expr must have exactly two children.");
+    // for simple, assume that the left child must always be column value
+    if (auto *left_column_value_expr =
+            dynamic_cast<const ColumnValueExpression *>(comparison_expr->GetChildren()[0].get());
+        left_column_value_expr != nullptr) {
+      auto left_tuple_idx = left_column_value_expr->GetTupleIdx();
+
+      std::vector<AbstractExpressionRef> children;
+      // if the right child is constant
+      if (const auto *right_constant_value_expr =
+              dynamic_cast<const ConstantValueExpression *>(comparison_expr->GetChildren()[1].get());
+          right_constant_value_expr != nullptr) {
+        if (!((*child_expressions)[left_tuple_idx])) {
+          (*child_expressions)[left_tuple_idx] = std::make_shared<ComparisonExpression>(
+              std::make_shared<ColumnValueExpression>(0, left_column_value_expr->GetColIdx(),
+                                                      left_column_value_expr->GetReturnType()),
+              comparison_expr->GetChildAt(1), comparison_expr->comp_type_);
+        } else {
+          (*child_expressions)[left_tuple_idx] = std::make_shared<LogicExpression>(
+              (*child_expressions)[left_tuple_idx],
+              std::make_shared<ComparisonExpression>(
+                  std::make_shared<ColumnValueExpression>(0, left_column_value_expr->GetColIdx(),
+                                                          left_column_value_expr->GetReturnType()),
+                  comparison_expr->GetChildAt(1), comparison_expr->comp_type_),
+              LogicType::And);
+        }
+
+        return;
+      }
+
+      // else, must be column value
+      if (const auto *right_column_value_expr =
+              dynamic_cast<const ColumnValueExpression *>(comparison_expr->GetChildren()[1].get());
+          right_column_value_expr != nullptr) {
+        auto right_tuple_idx = right_column_value_expr->GetTupleIdx();
+        if (left_tuple_idx != right_tuple_idx) {
+          if (!(*middle)) {
+            *middle = std::make_shared<ComparisonExpression>(
+                std::make_shared<ColumnValueExpression>(left_tuple_idx, left_column_value_expr->GetColIdx(),
+                                                        left_column_value_expr->GetReturnType()),
+                std::make_shared<ColumnValueExpression>(right_column_value_expr->GetTupleIdx(),
+                                                        right_column_value_expr->GetColIdx(),
+                                                        right_column_value_expr->GetReturnType()),
+                comparison_expr->comp_type_);
+          } else {
+            *middle = std::make_shared<LogicExpression>(
+                *middle,
+                std::make_shared<ComparisonExpression>(
+                    std::make_shared<ColumnValueExpression>(left_tuple_idx, left_column_value_expr->GetColIdx(),
+                                                            left_column_value_expr->GetReturnType()),
+                    std::make_shared<ColumnValueExpression>(right_column_value_expr->GetTupleIdx(),
+                                                            right_column_value_expr->GetColIdx(),
+                                                            right_column_value_expr->GetReturnType()),
+                    comparison_expr->comp_type_),
+                LogicType::And);
+          }
+        } else {
+          if (!((*child_expressions)[left_tuple_idx])) {
+            (*child_expressions)[left_tuple_idx] = std::make_shared<ComparisonExpression>(
+                std::make_shared<ColumnValueExpression>(0, left_column_value_expr->GetColIdx(),
+                                                        left_column_value_expr->GetReturnType()),
+                std::make_shared<ColumnValueExpression>(0, right_column_value_expr->GetColIdx(),
+                                                        right_column_value_expr->GetReturnType()),
+                comparison_expr->comp_type_);
+          } else {
+            (*child_expressions)[left_tuple_idx] = std::make_shared<LogicExpression>(
+                (*child_expressions)[left_tuple_idx],
+                std::make_shared<ComparisonExpression>(
+                    std::make_shared<ColumnValueExpression>(0, left_column_value_expr->GetColIdx(),
+                                                            left_column_value_expr->GetReturnType()),
+                    std::make_shared<ColumnValueExpression>(0, right_column_value_expr->GetColIdx(),
+                                                            right_column_value_expr->GetReturnType()),
+                    comparison_expr->comp_type_),
+                LogicType::And);
+          }
+        }
+
+        return;
+      }
+    }
+  }
+
+  if (!(*middle)) {
+    *middle = expr;
+  } else {
+    *middle = std::make_shared<LogicExpression>(*middle, expr, LogicType::And);
+  }
+}
+
+auto Optimizer::PredicatePushdown(const AbstractPlanNodeRef &plan, AbstractExpressionRef &expr) -> AbstractPlanNodeRef {
+  std::vector<AbstractPlanNodeRef> children;
+  if (plan->GetType() == PlanType::NestedLoopJoin) {
+    auto &nlj_plan = dynamic_cast<const NestedLoopJoinPlanNode &>(*plan);
+    if (((!expr || expr->ToString() == "true") &&
+         (!(nlj_plan.Predicate()) || nlj_plan.Predicate()->ToString() == "true"))) {
+      return plan;
+    }
+
+    std::vector<AbstractExpressionRef> child_expressions(2, nullptr);
+    AbstractExpressionRef middle = nullptr;
+
+    auto left_size = nlj_plan.GetChildAt(0)->OutputSchema().GetColumns().size();
+    auto right_size = nlj_plan.GetChildAt(1)->OutputSchema().GetColumns().size();
+
+    if (nlj_plan.Predicate() != nullptr && nlj_plan.Predicate()->ToString() != "true") {
+      SplitExpression(nlj_plan.Predicate(), &child_expressions, &middle, left_size, right_size);
+    }
+
+    if (expr != nullptr && expr->ToString() != "true") {
+      expr = RewriteExpressionForJoin(expr, left_size, right_size);
+      SplitExpression(expr, &child_expressions, &middle, left_size, right_size);
+    }
+
+    int i = -1;
+    for (auto &child : nlj_plan.GetChildren()) {
+      i++;
+      if (child->GetType() != PlanType::MockScan) {
+        children.emplace_back(PredicatePushdown(nlj_plan.GetChildAt(i), child_expressions[i]));
+      } else {
+        if (child_expressions[i] != nullptr) {
+          children.emplace_back(std::make_shared<FilterPlanNode>(
+              std::make_shared<const bustub::Schema>(child->OutputSchema()), child_expressions[i], child));
+        } else {
+          children.emplace_back(child);
+        }
+      }
+    }
+
+    auto return_plan = std::make_shared<NestedLoopJoinPlanNode>(std::make_shared<Schema>(nlj_plan.OutputSchema()),
+                                                                nlj_plan.GetLeftPlan(), nlj_plan.GetRightPlan(), middle,
+                                                                nlj_plan.GetJoinType());
+    return return_plan->CloneWithChildren(std::move(children));
+  }
+
+  for (const auto &child : plan->GetChildren()) {
+    children.emplace_back(OptimizePredicatePushdown(child));
+  }
+  auto optimized_plan = plan->CloneWithChildren(std::move(children));
+
+  if (optimized_plan->GetType() == PlanType::Filter) {
+    auto &filter_plan = dynamic_cast<const FilterPlanNode &>(*optimized_plan);
+    if (expr != nullptr) {
+      return std::make_shared<FilterPlanNode>(
+          std::make_shared<const bustub::Schema>(filter_plan.OutputSchema()),
+          std::make_shared<LogicExpression>(filter_plan.GetPredicate(), expr, LogicType::And),
+          filter_plan.GetChildAt(0));
+    }
+
+    return optimized_plan;
+  }
+
+  if (optimized_plan->GetType() == PlanType::SeqScan) {
+    auto &seq_plan = dynamic_cast<const SeqScanPlanNode &>(*optimized_plan);
+    if (expr != nullptr) {
+      if (seq_plan.filter_predicate_ != nullptr) {
+        return std::make_shared<SeqScanPlanNode>(
+            std::make_shared<const bustub::Schema>(seq_plan.OutputSchema()), seq_plan.GetTableOid(),
+            seq_plan.table_name_, std::make_shared<LogicExpression>(seq_plan.filter_predicate_, expr, LogicType::And));
+      }
+      return std::make_shared<SeqScanPlanNode>(std::make_shared<const bustub::Schema>(seq_plan.OutputSchema()),
+                                               seq_plan.GetTableOid(), seq_plan.table_name_, expr);
+    }
+
+    return optimized_plan;
+  }
+
+  return optimized_plan;
+}
+
+auto Optimizer::OptimizePredicatePushdown(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef {
+  std::shared_ptr<bustub::AbstractExpression> expr = nullptr;
+  return PredicatePushdown(plan, expr);
 }
 
 }  // namespace bustub

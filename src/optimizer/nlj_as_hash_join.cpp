@@ -81,7 +81,8 @@ auto Optimizer::OptimizeNLJAsHashJoin(const AbstractPlanNodeRef &plan) -> Abstra
 
     std::vector<AbstractExpressionRef> left_key_expressions;
     std::vector<AbstractExpressionRef> right_key_expressions;
-    if (CheckIfEquiConjunction(nlj_plan.Predicate(), &left_key_expressions, &right_key_expressions)) {
+    if (nlj_plan.Predicate() != nullptr &&
+        CheckIfEquiConjunction(nlj_plan.Predicate(), &left_key_expressions, &right_key_expressions)) {
       // swicth to a hash join
       return std::make_shared<HashJoinPlanNode>(nlj_plan.output_schema_, nlj_plan.GetLeftPlan(),
                                                 nlj_plan.GetRightPlan(), std::move(left_key_expressions),

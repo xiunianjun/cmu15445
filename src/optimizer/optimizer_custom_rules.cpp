@@ -13,6 +13,7 @@ auto Optimizer::OptimizeCustom(const AbstractPlanNodeRef &plan) -> AbstractPlanN
   p = OptimizeMergeFilterScan(p);
   p = OptimizeSeqscanAsIndexScan(p);
   p = OptimizeMergeFilterNLJ(p);
+  p = OptimizePredicatePushdown(p);
   p = OptimizeNLJAsHashJoin(p);
   p = OptimizeOrderByAsIndexScan(p);
   p = OptimizeSortLimitAsTopN(p);

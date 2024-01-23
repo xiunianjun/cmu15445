@@ -63,6 +63,12 @@ class Optimizer {
    */
   auto OptimizeMergeFilterScan(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
 
+  auto OptimizePredicatePushdown(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
+  
+  auto PredicatePushdown(const AbstractPlanNodeRef &plan, AbstractExpressionRef &expr) -> AbstractPlanNodeRef;
+  
+  void SplitExpression(const AbstractExpressionRef &expr, std::vector<AbstractExpressionRef> *child_expressions,
+                       AbstractExpressionRef *middle, int left_size, int right_size);
   /**
    * @brief change sequence scan to index scan
    */

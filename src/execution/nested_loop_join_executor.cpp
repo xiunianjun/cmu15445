@@ -63,10 +63,10 @@ auto NestedLoopJoinExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
       return false;
     }
 
-    if (plan_->Predicate()
-            ->EvaluateJoin(&current_left_tuple_, plan_->GetLeftPlan()->OutputSchema(), &right_tuple,
-                           plan_->GetRightPlan()->OutputSchema())
-            .GetAs<bool>()) {
+    if (plan_->Predicate() != nullptr && plan_->Predicate()
+                                             ->EvaluateJoin(&current_left_tuple_, plan_->GetLeftPlan()->OutputSchema(),
+                                                            &right_tuple, plan_->GetRightPlan()->OutputSchema())
+                                             .GetAs<bool>()) {
       current_left_used_ = true;
       break;
     }
