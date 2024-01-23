@@ -36,15 +36,15 @@ auto Optimizer::CheckIfColumnConstantConjunction(const AbstractExpressionRef &ex
   }
 
   // if is the comparison expr
-  if (const auto *comparision_expr = dynamic_cast<const ComparisonExpression *>(expr.get());
-      comparision_expr != nullptr) {
+  if (const auto *comparison_expr = dynamic_cast<const ComparisonExpression *>(expr.get());
+      comparison_expr != nullptr) {
     // check that the children must be constant and column
-    BUSTUB_ASSERT(comparision_expr->GetChildren().size() == 2, "Comparision expr must have exactly two children.");
+    BUSTUB_ASSERT(comparison_expr->GetChildren().size() == 2, "Comparison expr must have exactly two children.");
     if (const auto *column_value_expr =
-            dynamic_cast<const ColumnValueExpression *>(comparision_expr->GetChildren()[0].get());
+            dynamic_cast<const ColumnValueExpression *>(comparison_expr->GetChildren()[0].get());
         column_value_expr != nullptr) {
       if (const auto *constant_value_expr =
-              dynamic_cast<const ConstantValueExpression *>(comparision_expr->GetChildren()[1].get());
+              dynamic_cast<const ConstantValueExpression *>(comparison_expr->GetChildren()[1].get());
           constant_value_expr != nullptr) {
         bool exist = false;
         int idx = 0;
@@ -66,21 +66,21 @@ auto Optimizer::CheckIfColumnConstantConjunction(const AbstractExpressionRef &ex
 
         std::vector<Column> columns;
         auto v = constant_value_expr->Evaluate(nullptr, Schema(columns));
-        if (comparision_expr->comp_type_ == ComparisonType::GreaterThan ||
-            comparision_expr->comp_type_ == ComparisonType::GreaterThanOrEqual) {
+        if (comparison_expr->comp_type_ == ComparisonType::GreaterThan ||
+            comparison_expr->comp_type_ == ComparisonType::GreaterThanOrEqual) {
           if ((*first_values)[idx].CompareLessThan(v) == CmpBool::CmpTrue) {
             (*first_values)[idx] = v;
           }
         }
 
-        if (comparision_expr->comp_type_ == ComparisonType::LessThan ||
-            comparision_expr->comp_type_ == ComparisonType::LessThanOrEqual) {
+        if (comparison_expr->comp_type_ == ComparisonType::LessThan ||
+            comparison_expr->comp_type_ == ComparisonType::LessThanOrEqual) {
           if ((*last_values)[idx].CompareGreaterThan(v) == CmpBool::CmpTrue) {
             (*last_values)[idx] = v;
           }
         }
 
-        if (comparision_expr->comp_type_ == ComparisonType::Equal) {
+        if (comparison_expr->comp_type_ == ComparisonType::Equal) {
           (*first_values)[idx] = v;
           (*last_values)[idx] = v;
         }
@@ -97,7 +97,7 @@ auto Optimizer::CheckIfColumnConstantConjunction(const AbstractExpressionRef &ex
 
 auto Optimizer::OptimizeSeqscanAsIndexScan(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef {
   // the update case is too complex, so we simply choose not to perform optimization
-  if (plan->GetType() == PlanType::Update) {
+  if (plan->GetType() == PlanType::Update || plan->GetType() == PlanType::Delete) {
     return plan;
   }
 

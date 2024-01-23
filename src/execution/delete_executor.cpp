@@ -39,45 +39,19 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *param_tuple, RID *param_rid) -
   // insert into table
   auto table_info = exec_ctx_->GetCatalog()->GetTable(plan_->TableOid());
   auto table_heap = table_info->table_.get();
-  std::optional<Tuple> last_tuple = std::nullopt;
-  RID last_rid;
   Tuple tuple;
   RID rid;
   while (child_executor_->Next(&tuple, &rid)) {
-    if (!(last_tuple.has_value())) {
-      last_tuple = tuple;
-      last_rid = rid;
-      continue;
-    }
-
     // delete
-    auto meta = table_heap->GetTupleMeta(last_rid);
+    auto meta = table_heap->GetTupleMeta(rid);
     meta.is_deleted_ = true;
-    table_heap->UpdateTupleMeta(meta, last_rid);
+    table_heap->UpdateTupleMeta(meta, rid);
     // update indexes
     auto indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_);
     for (auto index_info : indexes) {
-      index_info->index_->DeleteEntry(last_tuple.value().KeyFromTuple(table_info->schema_, index_info->key_schema_,
-                                                                      index_info->index_->GetKeyAttrs()),
-                                      last_rid, exec_ctx_->GetTransaction());
-    }
-
-    delete_num_++;
-    last_tuple = tuple;
-    last_rid = rid;
-  }
-
-  if (last_tuple.has_value()) {
-    // delete
-    auto meta = table_heap->GetTupleMeta(last_rid);
-    meta.is_deleted_ = true;
-    table_heap->UpdateTupleMeta(meta, last_rid);
-    // update indexes
-    auto indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_);
-    for (auto index_info : indexes) {
-      index_info->index_->DeleteEntry(last_tuple.value().KeyFromTuple(table_info->schema_, index_info->key_schema_,
-                                                                      index_info->index_->GetKeyAttrs()),
-                                      last_rid, exec_ctx_->GetTransaction());
+      index_info->index_->DeleteEntry(
+          tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()), rid,
+          exec_ctx_->GetTransaction());
     }
 
     delete_num_++;

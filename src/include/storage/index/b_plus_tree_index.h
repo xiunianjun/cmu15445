@@ -37,8 +37,7 @@ class BPlusTreeIndex : public Index {
 
   auto GetBeginIterator() -> INDEXITERATOR_TYPE;
 
-  auto GetBeginIterator(const KeyType &key, bool is_ambiguous = false, bool is_end_ambiguous = false)
-      -> INDEXITERATOR_TYPE;
+  auto GetBeginIterator(const KeyType &key) -> INDEXITERATOR_TYPE;
 
   auto GetEndIterator() -> INDEXITERATOR_TYPE;
 

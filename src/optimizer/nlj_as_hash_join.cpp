@@ -46,8 +46,8 @@ auto Optimizer::CheckIfEquiConjunction(const AbstractExpressionRef &expr,
   }
 
   // if is the comparison expr
-  if (const auto *comparision_expr = dynamic_cast<const ComparisonExpression *>(expr.get());
-      comparision_expr != nullptr && comparision_expr->comp_type_ == ComparisonType::Equal) {
+  if (const auto *comparison_expr = dynamic_cast<const ComparisonExpression *>(expr.get());
+      comparison_expr != nullptr && comparison_expr->comp_type_ == ComparisonType::Equal) {
     return true;
   }
 

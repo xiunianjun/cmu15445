@@ -20,16 +20,19 @@ void IndexScanExecutor::Init() {
   auto tree = dynamic_cast<BPlusTreeIndexForTwoIntegerColumn *>(index_info->index_.get());
   table_info_ = exec_ctx_->GetCatalog()->GetTable(index_info->table_name_);
   if (plan_->first_key_.has_value()) {
-    current_iterator_ = std::make_unique<BPlusTreeIndexIteratorForTwoIntegerColumn>(
-        tree->GetBeginIterator(plan_->first_key_.value(), true, false));
+    current_iterator_ =
+        std::make_unique<BPlusTreeIndexIteratorForTwoIntegerColumn>(tree->GetBeginIterator(plan_->first_key_.value()));
 
   } else {
     current_iterator_ = std::make_unique<BPlusTreeIndexIteratorForTwoIntegerColumn>(tree->GetBeginIterator());
   }
 
   if (plan_->last_key_.has_value()) {
-    end_iterator_ = std::make_unique<BPlusTreeIndexIteratorForTwoIntegerColumn>(
-        tree->GetBeginIterator(plan_->last_key_.value(), true, true));
+    end_iterator_ =
+        std::make_unique<BPlusTreeIndexIteratorForTwoIntegerColumn>(tree->GetBeginIterator(plan_->last_key_.value()));
+    if (!(end_iterator_->IsEnd())) {
+      ++(*end_iterator_);
+    }
   } else {
     end_iterator_ = std::make_unique<BPlusTreeIndexIteratorForTwoIntegerColumn>(tree->GetEndIterator());
   }
