@@ -7,6 +7,7 @@
 #include "execution/plans/filter_plan.h"
 #include "execution/plans/index_scan_plan.h"
 #include "execution/plans/limit_plan.h"
+#include "execution/plans/values_plan.h"
 #include "execution/plans/nested_loop_join_plan.h"
 #include "execution/plans/seq_scan_plan.h"
 #include "execution/plans/sort_plan.h"
@@ -354,6 +355,74 @@ auto Optimizer::PredicatePushdown(const AbstractPlanNodeRef &plan, AbstractExpre
 auto Optimizer::OptimizePredicatePushdown(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef {
   std::shared_ptr<bustub::AbstractExpression> expr = nullptr;
   return PredicatePushdown(plan, expr);
+}
+
+auto Optimizer::CheckFilterPredicateStillFalse(const AbstractExpressionRef &expr) -> bool {
+  // if is "AND"
+  if (const auto *logic_expr = dynamic_cast<const LogicExpression *>(expr.get());
+      logic_expr != nullptr) {
+    if (logic_expr->logic_type_ == LogicType::And) {
+      // AND
+      for (auto &child : expr->GetChildren()) {
+        if (CheckFilterPredicateStillFalse(child)) {
+          return true;
+        }
+      }
+    } else {
+      // OR
+      for (auto &child : expr->GetChildren()) {
+        if (!(CheckFilterPredicateStillFalse(child))) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+  }
+
+  // if is the comparison expr
+  if (const auto *comparison_expr = dynamic_cast<const ComparisonExpression *>(expr.get());
+      comparison_expr != nullptr) {
+    // check that the children must be constant and column
+    BUSTUB_ASSERT(comparison_expr->GetChildren().size() == 2, "Comparison expr must have exactly two children.");
+    if (const auto *left_constant_value_expr =
+            dynamic_cast<const ConstantValueExpression *>(comparison_expr->GetChildren()[0].get());
+        left_constant_value_expr != nullptr) {
+      if (const auto *right_constant_value_expr =
+              dynamic_cast<const ConstantValueExpression *>(comparison_expr->GetChildren()[1].get());
+          right_constant_value_expr != nullptr) {
+        std::vector<Column> tmp_col;
+        Schema tmp_schema(tmp_col);
+        if (comparison_expr->Evaluate(nullptr, tmp_schema).GetAs<bool>() == false) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  return false;
+}
+
+auto Optimizer::OptimizeStillFalseFilter(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef {
+  if (plan->GetType() == PlanType::Filter) {
+    const auto &filter_plan = dynamic_cast<const FilterPlanNode &>(*plan);
+    BUSTUB_ASSERT(plan->children_.size() == 1, "must have exactly one children");
+    
+    if (CheckFilterPredicateStillFalse(filter_plan.GetPredicate())) {
+      std::vector<AbstractPlanNodeRef> children;
+      children.push_back(std::make_shared<ValuesPlanNode>(std::make_shared<Schema>(filter_plan.OutputSchema()), std::vector<std::vector<AbstractExpressionRef>>()));
+      return plan->CloneWithChildren(children);
+    }
+  }
+
+  std::vector<AbstractPlanNodeRef> children;
+  for (const auto &child : plan->GetChildren()) {
+    children.emplace_back(OptimizeStillFalseFilter(child));
+  }
+
+  return plan->CloneWithChildren(std::move(children));
 }
 
 }  // namespace bustub

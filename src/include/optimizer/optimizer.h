@@ -65,6 +65,10 @@ class Optimizer {
 
   auto OptimizePredicatePushdown(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
   
+  auto OptimizeStillFalseFilter(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
+    
+  auto CheckFilterPredicateStillFalse(const AbstractExpressionRef &expr) -> bool;
+  
   auto PredicatePushdown(const AbstractPlanNodeRef &plan, AbstractExpressionRef &expr) -> AbstractPlanNodeRef;
   
   void SplitExpression(const AbstractExpressionRef &expr, std::vector<AbstractExpressionRef> *child_expressions,

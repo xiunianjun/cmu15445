@@ -10,6 +10,7 @@ namespace bustub {
 auto Optimizer::OptimizeCustom(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef {
   auto p = plan;
   p = OptimizeMergeProjection(p);
+  p = OptimizeStillFalseFilter(p);
   p = OptimizeMergeFilterScan(p);
   p = OptimizeSeqscanAsIndexScan(p);
   p = OptimizeMergeFilterNLJ(p);
