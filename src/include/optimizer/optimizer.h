@@ -69,6 +69,10 @@ class Optimizer {
     
   auto CheckFilterPredicateStillFalse(const AbstractExpressionRef &expr) -> bool;
   
+  auto OptimizeColumnPruning(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
+  
+  void GetAllColumnsFromExpr(const AbstractExpressionRef &expr, std::vector<uint32_t> *needed_column_idx);
+
   auto PredicatePushdown(const AbstractPlanNodeRef &plan, AbstractExpressionRef &expr) -> AbstractPlanNodeRef;
   
   void SplitExpression(const AbstractExpressionRef &expr, std::vector<AbstractExpressionRef> *child_expressions,

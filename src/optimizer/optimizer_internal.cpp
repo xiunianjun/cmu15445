@@ -8,6 +8,8 @@
 #include "execution/plans/index_scan_plan.h"
 #include "execution/plans/limit_plan.h"
 #include "execution/plans/values_plan.h"
+#include "execution/plans/projection_plan.h"
+#include "execution/plans/aggregation_plan.h"
 #include "execution/plans/nested_loop_join_plan.h"
 #include "execution/plans/seq_scan_plan.h"
 #include "execution/plans/sort_plan.h"
@@ -423,6 +425,80 @@ auto Optimizer::OptimizeStillFalseFilter(const AbstractPlanNodeRef &plan) -> Abs
   }
 
   return plan->CloneWithChildren(std::move(children));
+}
+
+void Optimizer::GetAllColumnsFromExpr(const AbstractExpressionRef &expr, std::vector<uint32_t> *needed_column_idx) {
+  // check child first
+  for (const auto &child : expr->GetChildren()) {
+    GetAllColumnsFromExpr(child, needed_column_idx);
+  }
+
+  // then check current node
+  // if is the column expr
+  if (const auto *column_value_expr = dynamic_cast<const ColumnValueExpression *>(expr.get());
+      column_value_expr != nullptr) {
+    needed_column_idx->push_back(column_value_expr->GetColIdx());
+  }
+}
+
+auto Optimizer::OptimizeColumnPruning(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef {
+  // from top to buttom
+  // for simple, just check the projection-projection and projection-agg case...
+  if (plan->GetType() == PlanType::Projection) {
+    auto &parent_projection_plan = dynamic_cast<const ProjectionPlanNode &>(*plan);
+    BUSTUB_ENSURE(plan->children_.size() == 1, "Projection with multiple children?? That's weird!");
+    if (parent_projection_plan.GetChildAt(0)->GetType() == PlanType::Projection) {
+      auto &child_plan = dynamic_cast<const ProjectionPlanNode &>(*(parent_projection_plan.GetChildAt(0)));
+      std::vector<AbstractExpressionRef> expressions;
+      for (auto &expr : parent_projection_plan.GetExpressions()) {
+        // for simple, just deal with the case of all column value
+        if (const auto *column_value_expr = dynamic_cast<const ColumnValueExpression *>(expr.get());
+            column_value_expr != nullptr) {
+          expressions.push_back(child_plan.GetExpressions()[column_value_expr->GetColIdx()]);
+        } else {
+          return plan;
+        }
+      }
+      
+      // deal with itself again
+      return OptimizeColumnPruning(std::make_shared<ProjectionPlanNode>(std::make_shared<Schema>(parent_projection_plan.OutputSchema()), expressions, child_plan.GetChildAt(0)));
+    
+    } else if (parent_projection_plan.GetChildAt(0)->GetType() == PlanType::Aggregation) {
+      auto &child_plan = dynamic_cast<const AggregationPlanNode &>(*(parent_projection_plan.GetChildAt(0)));
+      std::vector<AbstractExpressionRef> expressions;
+      std::vector<AggregationType> agg_types;
+      std::vector<Column> columns;
+      std::vector<uint32_t> needed_column_idx;
+      for (auto &expr : parent_projection_plan.GetExpressions()) {
+        GetAllColumnsFromExpr(expr, &needed_column_idx);
+      }
+
+      // only deal with these cases:
+      // select max(v1), min(v2), count(*) ...;   only project aggragation columns
+      // select v2, max(v1), ... order by v2;     project only order by and aggragation columns, with order by columns in front
+      for (uint32_t i = 0; i < child_plan.GetGroupBys().size(); i ++) {
+        columns.push_back(child_plan.OutputSchema().GetColumn(i));
+      }
+      for (auto &idx : needed_column_idx) {
+        if (idx < child_plan.GetGroupBys().size()) {
+          continue;
+        }
+        uint32_t agg_idx = idx - child_plan.GetGroupBys().size();
+        expressions.push_back(child_plan.GetAggregateAt(agg_idx));
+        agg_types.push_back(child_plan.GetAggregateTypes()[agg_idx]);
+        columns.push_back(child_plan.OutputSchema().GetColumn(idx));
+      }
+
+      return std::make_shared<ProjectionPlanNode>(std::make_shared<Schema>(parent_projection_plan.OutputSchema()), parent_projection_plan.GetExpressions(), 
+            std::make_shared<AggregationPlanNode>(std::make_shared<Schema>(columns), child_plan.GetChildAt(0), child_plan.GetGroupBys(), expressions, agg_types));
+    }
+  }
+
+  std::vector<AbstractPlanNodeRef> children;
+  for (const auto &child : plan->GetChildren()) {
+    children.emplace_back(OptimizeColumnPruning(child));
+  }
+  return plan->CloneWithChildren(children);
 }
 
 }  // namespace bustub
