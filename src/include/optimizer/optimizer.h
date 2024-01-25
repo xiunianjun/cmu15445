@@ -70,6 +70,8 @@ class Optimizer {
   auto CheckFilterPredicateStillFalse(const AbstractExpressionRef &expr) -> bool;
   
   auto OptimizeColumnPruning(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
+
+  auto ChangeColumnsAccordingToPositionMap(const AbstractExpressionRef &expr, uint32_t *position_map, uint32_t offset) -> AbstractExpressionRef;
   
   void GetAllColumnsFromExpr(const AbstractExpressionRef &expr, std::vector<uint32_t> *needed_column_idx);
 

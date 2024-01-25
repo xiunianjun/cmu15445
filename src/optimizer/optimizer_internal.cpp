@@ -441,6 +441,23 @@ void Optimizer::GetAllColumnsFromExpr(const AbstractExpressionRef &expr, std::ve
   }
 }
 
+auto Optimizer::ChangeColumnsAccordingToPositionMap(const AbstractExpressionRef &expr, uint32_t *position_map, uint32_t offset) -> AbstractExpressionRef {
+  // check child first
+  std::vector<AbstractExpressionRef> children;
+  for (const auto &child : expr->GetChildren()) {
+    children.push_back(ChangeColumnsAccordingToPositionMap(child, position_map, offset));
+  }
+
+  // then check current node
+  // if is the column expr
+  if (const auto *column_value_expr = dynamic_cast<const ColumnValueExpression *>(expr.get());
+      column_value_expr != nullptr) {
+    return std::make_shared<ColumnValueExpression>(column_value_expr->GetTupleIdx(), position_map[column_value_expr->GetColIdx()], column_value_expr->GetReturnType());
+  }
+
+  return expr->CloneWithChildren(children);
+}
+
 auto Optimizer::OptimizeColumnPruning(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef {
   // from top to buttom
   // for simple, just check the projection-projection and projection-agg case...
@@ -466,9 +483,19 @@ auto Optimizer::OptimizeColumnPruning(const AbstractPlanNodeRef &plan) -> Abstra
     } else if (parent_projection_plan.GetChildAt(0)->GetType() == PlanType::Aggregation) {
       auto &child_plan = dynamic_cast<const AggregationPlanNode &>(*(parent_projection_plan.GetChildAt(0)));
       std::vector<AbstractExpressionRef> expressions;
+      std::vector<AbstractExpressionRef> new_expressions;
       std::vector<AggregationType> agg_types;
+      std::vector<AggregationType> new_agg_types;
       std::vector<Column> columns;
+      std::vector<Column> new_columns;
       std::vector<uint32_t> needed_column_idx;
+
+      /* First, eliminate useless aggragation columns, such as:
+          select d1, d2 from
+            select max(v1) as d1, max(v1) + max(v2) as d2, max(v3) as d3 from t1
+        -> (eliminate calculation of d3)
+          select d1, d2 from select max(v1) as d1, max(v1) + max(v2) as d2 from t1
+      */
       for (auto &expr : parent_projection_plan.GetExpressions()) {
         GetAllColumnsFromExpr(expr, &needed_column_idx);
       }
@@ -489,8 +516,47 @@ auto Optimizer::OptimizeColumnPruning(const AbstractPlanNodeRef &plan) -> Abstra
         columns.push_back(child_plan.OutputSchema().GetColumn(idx));
       }
 
-      return std::make_shared<ProjectionPlanNode>(std::make_shared<Schema>(parent_projection_plan.OutputSchema()), parent_projection_plan.GetExpressions(), 
-            std::make_shared<AggregationPlanNode>(std::make_shared<Schema>(columns), child_plan.GetChildAt(0), child_plan.GetGroupBys(), expressions, agg_types));
+      /* Then, eliminate the inner duplicate of aggragation.
+        After that, the sql will be:
+          select d1, d1 + d2 from
+            select max(v1) as d1, max(v2) as d2 from t1
+      */
+      uint32_t position_map[child_plan.GetGroupBys().size() + expressions.size()];
+      for (uint32_t i = 0; i < child_plan.GetGroupBys().size(); i ++) {
+        position_map[i] = i;
+      }
+
+      for (uint32_t i = 0; i < expressions.size(); i ++) {
+        bool is_find = false;
+        uint32_t j = 0;
+        for (j = 0; j < new_expressions.size(); j ++) {
+          if (new_agg_types[j] == agg_types[i] && new_expressions[j]->ToString() == expressions[i]->ToString()) {
+            is_find = true;
+            break;
+          }
+        }
+
+        if (!is_find) {
+          new_expressions.push_back(expressions[i]);
+          new_agg_types.push_back(agg_types[i]);
+          position_map[i + child_plan.GetGroupBys().size()] = new_expressions.size() - 1 + child_plan.GetGroupBys().size();
+        } else {
+          auto it = columns.begin();
+          for (uint32_t m = 0; m < i + child_plan.GetGroupBys().size(); m ++) {
+            it ++;
+          }
+          columns.erase(it);
+          position_map[i + child_plan.GetGroupBys().size()] = j + child_plan.GetGroupBys().size();
+        }
+      }
+
+      std::vector<AbstractExpressionRef> parent_exprs;
+      for (auto &expr : parent_projection_plan.GetExpressions()) {
+        parent_exprs.push_back(ChangeColumnsAccordingToPositionMap(expr, position_map, child_plan.GetGroupBys().size()));
+      }
+
+      return std::make_shared<ProjectionPlanNode>(std::make_shared<Schema>(parent_projection_plan.OutputSchema()), parent_exprs, 
+            std::make_shared<AggregationPlanNode>(std::make_shared<Schema>(columns), child_plan.GetChildAt(0), child_plan.GetGroupBys(), new_expressions, new_agg_types));
     }
   }
 
