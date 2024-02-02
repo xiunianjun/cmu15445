@@ -63,20 +63,45 @@ class Optimizer {
    */
   auto OptimizeMergeFilterScan(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
 
+  /**
+   * @brief push down predicate up-to-down
+   */
   auto OptimizePredicatePushdown(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
-  
+
+  /**
+   * @brief prune the always false filter and its subtrees
+   */
   auto OptimizeStillFalseFilter(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
-    
+
+  /**
+   * @brief helper function to check whether a predicate is consistently false
+   */
   auto CheckFilterPredicateStillFalse(const AbstractExpressionRef &expr) -> bool;
-  
+
+  /**
+   * @brief prune useless columns up-to-down
+   */
   auto OptimizeColumnPruning(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
 
-  auto ChangeColumnsAccordingToPositionMap(const AbstractExpressionRef &expr, uint32_t *position_map, uint32_t offset) -> AbstractExpressionRef;
-  
+  /**
+   * @brief helper function to rewrite the column value idx according to the position map
+   */
+  auto ChangeColumnsAccordingToPositionMap(const AbstractExpressionRef &expr, uint32_t *position_map, uint32_t offset)
+      -> AbstractExpressionRef;
+
+  /**
+   * @brief helper function to get column indexes from expression
+   */
   void GetAllColumnsFromExpr(const AbstractExpressionRef &expr, std::vector<uint32_t> *needed_column_idx);
 
+  /**
+   * @brief helper function to push down the predicate
+   */
   auto PredicatePushdown(const AbstractPlanNodeRef &plan, AbstractExpressionRef &expr) -> AbstractPlanNodeRef;
-  
+
+  /**
+   * @brief helper function to category the exprs into three kinds
+   */
   void SplitExpression(const AbstractExpressionRef &expr, std::vector<AbstractExpressionRef> *child_expressions,
                        AbstractExpressionRef *middle, int left_size, int right_size);
   /**
@@ -96,10 +121,17 @@ class Optimizer {
   auto RewriteExpressionForJoin(const AbstractExpressionRef &expr, size_t left_column_cnt, size_t right_column_cnt)
       -> AbstractExpressionRef;
 
+  /**
+   * @brief helper function to check whether the expr is constructed by only euqual comparisions
+   */
   auto CheckIfEquiConjunction(const AbstractExpressionRef &expr,
                               std::vector<AbstractExpressionRef> *left_key_expressions,
                               std::vector<AbstractExpressionRef> *right_key_expressions) -> bool;
 
+  /**
+   * @brief helper function to check whether the expr is constructed by only comparisions between column values and
+   * constant values
+   */
   auto CheckIfColumnConstantConjunction(const AbstractExpressionRef &expr, std::vector<uint32_t> *column_indexes,
                                         std::vector<Value> *first_values, std::vector<Value> *last_values) -> bool;
 

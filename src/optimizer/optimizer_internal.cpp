@@ -4,16 +4,16 @@
 #include "execution/expressions/comparison_expression.h"
 #include "execution/expressions/constant_value_expression.h"
 #include "execution/expressions/logic_expression.h"
+#include "execution/plans/aggregation_plan.h"
 #include "execution/plans/filter_plan.h"
 #include "execution/plans/index_scan_plan.h"
 #include "execution/plans/limit_plan.h"
-#include "execution/plans/values_plan.h"
-#include "execution/plans/projection_plan.h"
-#include "execution/plans/aggregation_plan.h"
 #include "execution/plans/nested_loop_join_plan.h"
+#include "execution/plans/projection_plan.h"
 #include "execution/plans/seq_scan_plan.h"
 #include "execution/plans/sort_plan.h"
 #include "execution/plans/topn_plan.h"
+#include "execution/plans/values_plan.h"
 
 #include "optimizer/optimizer.h"
 
@@ -175,11 +175,6 @@ void Optimizer::SplitExpression(const AbstractExpressionRef &expr,
     for (auto &child : expr->GetChildren()) {
       SplitExpression(child, child_expressions, middle, left_size, right_size);
     }
-    // std::all_of(expr->GetChildren().begin(), expr->GetChildren().end(),
-    //     [this, child_expressions, middle, left_size, right_size](const AbstractExpressionRef &child) {
-    //       SplitExpression(child, child_expressions, middle, left_size, right_size);
-    //       return true;
-    //     });
     return;
   }
 
@@ -361,8 +356,7 @@ auto Optimizer::OptimizePredicatePushdown(const AbstractPlanNodeRef &plan) -> Ab
 
 auto Optimizer::CheckFilterPredicateStillFalse(const AbstractExpressionRef &expr) -> bool {
   // if is "AND"
-  if (const auto *logic_expr = dynamic_cast<const LogicExpression *>(expr.get());
-      logic_expr != nullptr) {
+  if (const auto *logic_expr = dynamic_cast<const LogicExpression *>(expr.get()); logic_expr != nullptr) {
     if (logic_expr->logic_type_ == LogicType::And) {
       // AND
       for (auto &child : expr->GetChildren()) {
@@ -372,13 +366,8 @@ auto Optimizer::CheckFilterPredicateStillFalse(const AbstractExpressionRef &expr
       }
     } else {
       // OR
-      for (auto &child : expr->GetChildren()) {
-        if (!(CheckFilterPredicateStillFalse(child))) {
-          return false;
-        }
-      }
-
-      return true;
+      return std::all_of(expr->GetChildren().begin(), expr->GetChildren().end(),
+                         [this](const AbstractExpressionRef &child) { return CheckFilterPredicateStillFalse(child); });
     }
   }
 
@@ -395,7 +384,7 @@ auto Optimizer::CheckFilterPredicateStillFalse(const AbstractExpressionRef &expr
           right_constant_value_expr != nullptr) {
         std::vector<Column> tmp_col;
         Schema tmp_schema(tmp_col);
-        if (comparison_expr->Evaluate(nullptr, tmp_schema).GetAs<bool>() == false) {
+        if (!(comparison_expr->Evaluate(nullptr, tmp_schema).GetAs<bool>())) {
           return true;
         }
       }
@@ -411,10 +400,11 @@ auto Optimizer::OptimizeStillFalseFilter(const AbstractPlanNodeRef &plan) -> Abs
   if (plan->GetType() == PlanType::Filter) {
     const auto &filter_plan = dynamic_cast<const FilterPlanNode &>(*plan);
     BUSTUB_ASSERT(plan->children_.size() == 1, "must have exactly one children");
-    
+
     if (CheckFilterPredicateStillFalse(filter_plan.GetPredicate())) {
       std::vector<AbstractPlanNodeRef> children;
-      children.push_back(std::make_shared<ValuesPlanNode>(std::make_shared<Schema>(filter_plan.OutputSchema()), std::vector<std::vector<AbstractExpressionRef>>()));
+      children.push_back(std::make_shared<ValuesPlanNode>(std::make_shared<Schema>(filter_plan.OutputSchema()),
+                                                          std::vector<std::vector<AbstractExpressionRef>>()));
       return plan->CloneWithChildren(children);
     }
   }
@@ -441,7 +431,8 @@ void Optimizer::GetAllColumnsFromExpr(const AbstractExpressionRef &expr, std::ve
   }
 }
 
-auto Optimizer::ChangeColumnsAccordingToPositionMap(const AbstractExpressionRef &expr, uint32_t *position_map, uint32_t offset) -> AbstractExpressionRef {
+auto Optimizer::ChangeColumnsAccordingToPositionMap(const AbstractExpressionRef &expr, uint32_t *position_map,
+                                                    uint32_t offset) -> AbstractExpressionRef {
   // check child first
   std::vector<AbstractExpressionRef> children;
   for (const auto &child : expr->GetChildren()) {
@@ -452,7 +443,9 @@ auto Optimizer::ChangeColumnsAccordingToPositionMap(const AbstractExpressionRef 
   // if is the column expr
   if (const auto *column_value_expr = dynamic_cast<const ColumnValueExpression *>(expr.get());
       column_value_expr != nullptr) {
-    return std::make_shared<ColumnValueExpression>(column_value_expr->GetTupleIdx(), position_map[column_value_expr->GetColIdx()], column_value_expr->GetReturnType());
+    return std::make_shared<ColumnValueExpression>(column_value_expr->GetTupleIdx(),
+                                                   position_map[column_value_expr->GetColIdx()],
+                                                   column_value_expr->GetReturnType());
   }
 
   return expr->CloneWithChildren(children);
@@ -461,7 +454,15 @@ auto Optimizer::ChangeColumnsAccordingToPositionMap(const AbstractExpressionRef 
 auto Optimizer::OptimizeColumnPruning(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef {
   // from top to buttom
   // for simple, just check the projection-projection and projection-agg case...
+
+  // the projection-projection case
   if (plan->GetType() == PlanType::Projection) {
+    /* Eliminate useless aggragation columns and merge two projection, such as:
+      select d1, d2 from
+        select max(v1) as d1, max(v1) + max(v2) as d2, max(v3) as d3 from t1
+    -> (eliminate calculation of d3)
+      select max(v1), max(v1) + max(v2) from t1
+    */
     auto &parent_projection_plan = dynamic_cast<const ProjectionPlanNode &>(*plan);
     BUSTUB_ENSURE(plan->children_.size() == 1, "Projection with multiple children?? That's weird!");
     if (parent_projection_plan.GetChildAt(0)->GetType() == PlanType::Projection) {
@@ -476,11 +477,14 @@ auto Optimizer::OptimizeColumnPruning(const AbstractPlanNodeRef &plan) -> Abstra
           return plan;
         }
       }
-      
+
       // deal with itself again
-      return OptimizeColumnPruning(std::make_shared<ProjectionPlanNode>(std::make_shared<Schema>(parent_projection_plan.OutputSchema()), expressions, child_plan.GetChildAt(0)));
-    
-    } else if (parent_projection_plan.GetChildAt(0)->GetType() == PlanType::Aggregation) {
+      return OptimizeColumnPruning(std::make_shared<ProjectionPlanNode>(
+          std::make_shared<Schema>(parent_projection_plan.OutputSchema()), expressions, child_plan.GetChildAt(0)));
+    }
+
+    // the projection-agg case
+    if (parent_projection_plan.GetChildAt(0)->GetType() == PlanType::Aggregation) {
       auto &child_plan = dynamic_cast<const AggregationPlanNode &>(*(parent_projection_plan.GetChildAt(0)));
       std::vector<AbstractExpressionRef> expressions;
       std::vector<AbstractExpressionRef> new_expressions;
@@ -496,14 +500,19 @@ auto Optimizer::OptimizeColumnPruning(const AbstractPlanNodeRef &plan) -> Abstra
         -> (eliminate calculation of d3)
           select d1, d2 from select max(v1) as d1, max(v1) + max(v2) as d2 from t1
       */
+      // Ten days later I think this segment of code is not neccessary
+      // because this case is done by the projection-projection case.
+      // But it's troublesome to edit the code so it can just be understood
+      // as a simple copy behaviour to the child_plan.aggrations and schema.
       for (auto &expr : parent_projection_plan.GetExpressions()) {
         GetAllColumnsFromExpr(expr, &needed_column_idx);
       }
 
       // only deal with these cases:
       // select max(v1), min(v2), count(*) ...;   only project aggragation columns
-      // select v2, max(v1), ... order by v2;     project only order by and aggragation columns, with order by columns in front
-      for (uint32_t i = 0; i < child_plan.GetGroupBys().size(); i ++) {
+      // select v2, max(v1), ... order by v2;     project only order by and aggragation columns, with order-by columns
+      // in front
+      for (uint32_t i = 0; i < child_plan.GetGroupBys().size(); i++) {
         columns.push_back(child_plan.OutputSchema().GetColumn(i));
       }
       for (auto &idx : needed_column_idx) {
@@ -522,14 +531,14 @@ auto Optimizer::OptimizeColumnPruning(const AbstractPlanNodeRef &plan) -> Abstra
             select max(v1) as d1, max(v2) as d2 from t1
       */
       uint32_t position_map[child_plan.GetGroupBys().size() + expressions.size()];
-      for (uint32_t i = 0; i < child_plan.GetGroupBys().size(); i ++) {
+      for (uint32_t i = 0; i < child_plan.GetGroupBys().size(); i++) {
         position_map[i] = i;
       }
 
-      for (uint32_t i = 0; i < expressions.size(); i ++) {
+      for (uint32_t i = 0; i < expressions.size(); i++) {
         bool is_find = false;
         uint32_t j = 0;
-        for (j = 0; j < new_expressions.size(); j ++) {
+        for (j = 0; j < new_expressions.size(); j++) {
           if (new_agg_types[j] == agg_types[i] && new_expressions[j]->ToString() == expressions[i]->ToString()) {
             is_find = true;
             break;
@@ -539,11 +548,12 @@ auto Optimizer::OptimizeColumnPruning(const AbstractPlanNodeRef &plan) -> Abstra
         if (!is_find) {
           new_expressions.push_back(expressions[i]);
           new_agg_types.push_back(agg_types[i]);
-          position_map[i + child_plan.GetGroupBys().size()] = new_expressions.size() - 1 + child_plan.GetGroupBys().size();
+          position_map[i + child_plan.GetGroupBys().size()] =
+              new_expressions.size() - 1 + child_plan.GetGroupBys().size();
         } else {
           auto it = columns.begin();
-          for (uint32_t m = 0; m < i + child_plan.GetGroupBys().size(); m ++) {
-            it ++;
+          for (uint32_t m = 0; m < i + child_plan.GetGroupBys().size(); m++) {
+            it++;
           }
           columns.erase(it);
           position_map[i + child_plan.GetGroupBys().size()] = j + child_plan.GetGroupBys().size();
@@ -552,11 +562,14 @@ auto Optimizer::OptimizeColumnPruning(const AbstractPlanNodeRef &plan) -> Abstra
 
       std::vector<AbstractExpressionRef> parent_exprs;
       for (auto &expr : parent_projection_plan.GetExpressions()) {
-        parent_exprs.push_back(ChangeColumnsAccordingToPositionMap(expr, position_map, child_plan.GetGroupBys().size()));
+        parent_exprs.push_back(
+            ChangeColumnsAccordingToPositionMap(expr, position_map, child_plan.GetGroupBys().size()));
       }
 
-      return std::make_shared<ProjectionPlanNode>(std::make_shared<Schema>(parent_projection_plan.OutputSchema()), parent_exprs, 
-            std::make_shared<AggregationPlanNode>(std::make_shared<Schema>(columns), child_plan.GetChildAt(0), child_plan.GetGroupBys(), new_expressions, new_agg_types));
+      return std::make_shared<ProjectionPlanNode>(
+          std::make_shared<Schema>(parent_projection_plan.OutputSchema()), parent_exprs,
+          std::make_shared<AggregationPlanNode>(std::make_shared<Schema>(columns), child_plan.GetChildAt(0),
+                                                child_plan.GetGroupBys(), new_expressions, new_agg_types));
     }
   }
 
