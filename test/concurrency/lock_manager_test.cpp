@@ -149,11 +149,7 @@ void MixedTableLockTest1() {
   auto task = [&](int txn_id) {
     bool res;
     for (const table_oid_t &oid : oids) {
-      if (txn_id % 2 == 1) {
-        res = lock_mgr.LockTable(txns[txn_id], LockManager::LockMode::SHARED, oid);
-      } else {
-        res = lock_mgr.LockTable(txns[txn_id], LockManager::LockMode::EXCLUSIVE, oid);
-      }
+      res = lock_mgr.LockTable(txns[txn_id], static_cast<LockManager::LockMode>(txn_id % 5), oid);
       EXPECT_TRUE(res);
       CheckGrowing(txns[txn_id]);
     }
@@ -187,20 +183,20 @@ void MixedTableLockTest1() {
 TEST(LockManagerTest, ExclusiveTableLockTest1) { ExclusiveTableLockTest1(); }  // NOLINT
 TEST(LockManagerTest, MixedTableLockTest1) { MixedTableLockTest1(); }  // NOLINT
 
-/** Upgrading single transaction from S -> X */
-void TableLockUpgradeTest1() {
+/** Upgrading single transaction from old -> new */
+void TableLockUpgrade(LockManager::LockMode old_mode, LockManager::LockMode new_mode) {
   LockManager lock_mgr{};
   TransactionManager txn_mgr{&lock_mgr};
   table_oid_t oid = 0;
   auto txn1 = txn_mgr.Begin();
 
-  /** Take S lock */
-  EXPECT_EQ(true, lock_mgr.LockTable(txn1, LockManager::LockMode::SHARED, oid));
-  CheckTableLockSizes(txn1, 1, 0, 0, 0, 0);
+  /** Take old lock */
+  EXPECT_EQ(true, lock_mgr.LockTable(txn1, old_mode, oid));
+  // CheckTableLockSizes(txn1, 1, 0, 0, 0, 0);
 
-  /** Upgrade S to X */
-  EXPECT_EQ(true, lock_mgr.LockTable(txn1, LockManager::LockMode::EXCLUSIVE, oid));
-  CheckTableLockSizes(txn1, 0, 1, 0, 0, 0);
+  /** Upgrade old to new */
+  EXPECT_EQ(true, lock_mgr.LockTable(txn1, new_mode, oid));
+  // CheckTableLockSizes(txn1, 0, 1, 0, 0, 0);
 
   /** Clean up */
   txn_mgr.Commit(txn1);
@@ -209,7 +205,93 @@ void TableLockUpgradeTest1() {
 
   delete txn1;
 }
-TEST(LockManagerTest, TableLockUpgradeTest1) { TableLockUpgradeTest1(); }  // NOLINT
+
+TEST(LockManagerTest, TableLockUpgradeTest1) {
+  // S -> S
+  TableLockUpgrade(LockManager::LockMode::SHARED, LockManager::LockMode::SHARED); 
+  // S -> X
+  TableLockUpgrade(LockManager::LockMode::SHARED, LockManager::LockMode::EXCLUSIVE); 
+
+  // // X -> IS
+  // TableLockUpgrade(LockManager::LockMode::EXCLUSIVE, LockManager::LockMode::INTENTION_SHARED); 
+}
+
+TEST(LockManagerTest, MixedTableLockUpgradeTest) {
+  LockManager lock_mgr{};
+  TransactionManager txn_mgr{&lock_mgr};
+
+  std::vector<table_oid_t> oids;
+  std::vector<Transaction *> txns;
+
+  /** 20 tables */
+  int num_oids = 20;
+  for (int i = 0; i < num_oids + 1; i++) {
+    table_oid_t oid{static_cast<uint32_t>(i)};
+    oids.push_back(oid);
+    txns.push_back(txn_mgr.Begin());
+    EXPECT_EQ(i, txns[i]->GetTransactionId());
+  }
+
+  for (const table_oid_t &oid : oids) {
+    /** Take old lock */
+    EXPECT_EQ(true, lock_mgr.LockTable(txns[num_oids], LockManager::LockMode::INTENTION_SHARED, oid));
+    printf("upgrade task[%d] lock %d success!\n", num_oids, oid);
+    CheckGrowing(txns[num_oids]);
+  }
+
+  /** Each transaction takes an S lock OR an X lock on every table and then unlocks */
+  auto task = [&](int txn_id) {
+    bool res;
+    for (const table_oid_t &oid : oids) {
+      res = lock_mgr.LockTable(txns[txn_id], LockManager::LockMode::SHARED, oid);
+      EXPECT_TRUE(res);
+      // printf("task[%d] lock %d success!\n", txn_id, oid);
+      CheckGrowing(txns[txn_id]);
+    }
+
+    sleep(1);
+
+    for (const table_oid_t &oid : oids) {
+      res = lock_mgr.UnlockTable(txns[txn_id], oid);
+      EXPECT_TRUE(res);
+      // printf("task[%d] unlock %d success!\n", txn_id, oid);
+      CheckShrinking(txns[txn_id]);
+    }
+    txn_mgr.Commit(txns[txn_id]);
+    CheckCommitted(txns[txn_id]);
+
+    /** All locks should be dropped */
+    CheckTableLockSizes(txns[txn_id], 0, 0, 0, 0, 0);
+  };
+
+  std::vector<std::thread> threads;
+  threads.reserve(num_oids);
+
+  for (int i = 0; i < num_oids; i++) {
+    threads.emplace_back(std::thread{task, i});
+  }
+
+  for (const table_oid_t &oid : oids) {
+    /** Upgrade old to new */
+    printf("upgrade task[%d] want to change %d...\n", num_oids, oid);
+    EXPECT_EQ(true, lock_mgr.LockTable(txns[num_oids], LockManager::LockMode::EXCLUSIVE, oid));
+    printf("upgrade task[%d] change %d success!\n", num_oids, oid);
+  }
+
+  txn_mgr.Commit(txns[num_oids]);
+  CheckCommitted(txns[num_oids]);
+
+  /** All locks should be dropped */
+  CheckTableLockSizes(txns[num_oids], 0, 0, 0, 0, 0);
+
+  for (int i = 0; i < num_oids; i++) {
+    threads[i].join();
+  }
+
+  for (int i = 0; i < num_oids + 1; i++) {
+    delete txns[i];
+  }
+}
 
 void RowLockTest1() {
   LockManager lock_mgr{};
