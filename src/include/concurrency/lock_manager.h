@@ -76,6 +76,7 @@ class LockManager {
 
   /**
    * Creates a new lock manager configured for the deadlock detection policy.
+   * xiunian: it's worth attention that we use a deadlock detection mechanism.
    */
   LockManager() = default;
 
@@ -100,6 +101,7 @@ class LockManager {
    * [LOCK_NOTE]
    *
    * GENERAL BEHAVIOUR:
+   *    xiunian: Lock rows attention
    *    Both LockTable() and LockRow() are blocking methods; they should wait till the lock is granted and then return.
    *    If the transaction was aborted in the meantime, do not grant the lock and return false.
    *
@@ -108,9 +110,11 @@ class LockManager {
    *    LockManager should maintain a queue for each resource; locks should be granted to transactions in a FIFO manner.
    *    If there are multiple compatible lock requests, all should be granted at the same time
    *    as long as FIFO is honoured.
+   *    xiunian: each resource has a FIFO transaction queue; grant multiple requests one time
    *
    * SUPPORTED LOCK MODES:
    *    Table locking should support all lock modes.
+   *    xiunian: Lock rows attention
    *    Row locking should not support Intention locks. Attempting this should set the TransactionState as
    *    ABORTED and throw a TransactionAbortException (ATTEMPTED_INTENTION_LOCK_ON_ROW)
    *
@@ -143,6 +147,7 @@ class LockManager {
    *
    *
    * MULTILEVEL LOCKING:
+   *    xiunian: Lock rows attention
    *    While locking rows, Lock() should ensure that the transaction has an appropriate lock on the table which the row
    *    belongs to. For instance, if an exclusive lock is attempted on a row, the transaction must hold either
    *    X, IX, or SIX on the table. If such a lock does not exist on the table, Lock() should set the TransactionState
