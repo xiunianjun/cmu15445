@@ -19,96 +19,94 @@
 namespace bustub {
 
 void InsertTransactionTableSetByLockMode(Transaction *txn, LockManager::LockMode lock_mode, const table_oid_t &oid) {
-  switch (lock_mode)
-  {
-  case LockManager::LockMode::EXCLUSIVE:
-    txn->GetExclusiveTableLockSet()->insert(oid);
-    break;
-  case LockManager::LockMode::SHARED:
-    txn->GetSharedTableLockSet()->insert(oid);
-    break;
-  case LockManager::LockMode::INTENTION_EXCLUSIVE:
-    txn->GetIntentionExclusiveTableLockSet()->insert(oid);
-    break;
-  case LockManager::LockMode::INTENTION_SHARED:
-    txn->GetIntentionSharedTableLockSet()->insert(oid);
-    break;
-  case LockManager::LockMode::SHARED_INTENTION_EXCLUSIVE:
-    txn->GetSharedIntentionExclusiveTableLockSet()->insert(oid);
-    break;
-  default:
-    break;
+  switch (lock_mode) {
+    case LockManager::LockMode::EXCLUSIVE:
+      txn->GetExclusiveTableLockSet()->emplace(oid);
+      break;
+    case LockManager::LockMode::SHARED:
+      txn->GetSharedTableLockSet()->emplace(oid);
+      break;
+    case LockManager::LockMode::INTENTION_EXCLUSIVE:
+      txn->GetIntentionExclusiveTableLockSet()->emplace(oid);
+      break;
+    case LockManager::LockMode::INTENTION_SHARED:
+      txn->GetIntentionSharedTableLockSet()->emplace(oid);
+      break;
+    case LockManager::LockMode::SHARED_INTENTION_EXCLUSIVE:
+      txn->GetSharedIntentionExclusiveTableLockSet()->emplace(oid);
+      break;
+    default:
+      break;
   }
 }
 
-void InsertTransactionRowSetByLockMode(Transaction *txn, LockManager::LockMode lock_mode, const table_oid_t &oid, const RID &rid) {
+void InsertTransactionRowSetByLockMode(Transaction *txn, LockManager::LockMode lock_mode, const table_oid_t &oid,
+                                       const RID &rid) {
   auto it = txn->GetExclusiveRowLockSet()->find(oid);
-  switch (lock_mode)
-  {
-  case LockManager::LockMode::EXCLUSIVE:
-    it = txn->GetExclusiveRowLockSet()->find(oid);
-    if (it == txn->GetExclusiveRowLockSet()->end()) {
-      txn->GetExclusiveRowLockSet()->emplace(oid, std::unordered_set<bustub::RID>());
+  switch (lock_mode) {
+    case LockManager::LockMode::EXCLUSIVE:
       it = txn->GetExclusiveRowLockSet()->find(oid);
-    }
-    it->second.emplace(rid);
-    break;
-  case LockManager::LockMode::SHARED:
-    it = txn->GetSharedRowLockSet()->find(oid);
-    if (it == txn->GetSharedRowLockSet()->end()) {
-      txn->GetSharedRowLockSet()->emplace(oid, std::unordered_set<bustub::RID>());
+      if (it == txn->GetExclusiveRowLockSet()->end()) {
+        txn->GetExclusiveRowLockSet()->emplace(oid, std::unordered_set<bustub::RID>());
+        it = txn->GetExclusiveRowLockSet()->find(oid);
+      }
+      it->second.emplace(rid);
+      break;
+    case LockManager::LockMode::SHARED:
       it = txn->GetSharedRowLockSet()->find(oid);
-    }
-    it->second.emplace(rid);
-    break;
-  default:
-    break;
+      if (it == txn->GetSharedRowLockSet()->end()) {
+        txn->GetSharedRowLockSet()->emplace(oid, std::unordered_set<bustub::RID>());
+        it = txn->GetSharedRowLockSet()->find(oid);
+      }
+      it->second.emplace(rid);
+      break;
+    default:
+      break;
   }
 }
 
 void EraseTransactionTableSetByLockMode(Transaction *txn, LockManager::LockMode lock_mode, const table_oid_t &oid) {
-  switch (lock_mode)
-  {
-  case LockManager::LockMode::EXCLUSIVE:
-    txn->GetExclusiveTableLockSet()->erase(txn->GetExclusiveTableLockSet()->find(oid));
-    break;
-  case LockManager::LockMode::SHARED:
-    txn->GetSharedTableLockSet()->erase(txn->GetSharedTableLockSet()->find(oid));
-    break;
-  case LockManager::LockMode::INTENTION_EXCLUSIVE:
-    txn->GetIntentionExclusiveTableLockSet()->erase(txn->GetIntentionExclusiveTableLockSet()->find(oid));
-    break;
-  case LockManager::LockMode::INTENTION_SHARED:
-    txn->GetIntentionSharedTableLockSet()->erase(txn->GetIntentionSharedTableLockSet()->find(oid));
-    break;
-  case LockManager::LockMode::SHARED_INTENTION_EXCLUSIVE:
-    txn->GetSharedIntentionExclusiveTableLockSet()->erase(txn->GetSharedIntentionExclusiveTableLockSet()->find(oid));
-    break;
-  default:
-    break;
+  switch (lock_mode) {
+    case LockManager::LockMode::EXCLUSIVE:
+      txn->GetExclusiveTableLockSet()->erase(txn->GetExclusiveTableLockSet()->find(oid));
+      break;
+    case LockManager::LockMode::SHARED:
+      txn->GetSharedTableLockSet()->erase(txn->GetSharedTableLockSet()->find(oid));
+      break;
+    case LockManager::LockMode::INTENTION_EXCLUSIVE:
+      txn->GetIntentionExclusiveTableLockSet()->erase(txn->GetIntentionExclusiveTableLockSet()->find(oid));
+      break;
+    case LockManager::LockMode::INTENTION_SHARED:
+      txn->GetIntentionSharedTableLockSet()->erase(txn->GetIntentionSharedTableLockSet()->find(oid));
+      break;
+    case LockManager::LockMode::SHARED_INTENTION_EXCLUSIVE:
+      txn->GetSharedIntentionExclusiveTableLockSet()->erase(txn->GetSharedIntentionExclusiveTableLockSet()->find(oid));
+      break;
+    default:
+      break;
   }
 }
 
-void EraseTransactionRowSetByLockMode(Transaction *txn, LockManager::LockMode lock_mode, const table_oid_t &oid, const RID &rid) {
+void EraseTransactionRowSetByLockMode(Transaction *txn, LockManager::LockMode lock_mode, const table_oid_t &oid,
+                                      const RID &rid) {
   auto it = txn->GetExclusiveRowLockSet()->find(oid);
-  switch (lock_mode)
-  {
-  case LockManager::LockMode::EXCLUSIVE:
-    it = txn->GetExclusiveRowLockSet()->find(oid);
-    it->second.erase(it->second.find(rid));
-    if (it->second.empty()) {
-      txn->GetExclusiveRowLockSet()->erase(it);
-    }
-    break;
-  case LockManager::LockMode::SHARED:
-    it = txn->GetSharedRowLockSet()->find(oid);
-    it->second.erase(it->second.find(rid));
-    if (it->second.empty()) {
-      txn->GetSharedRowLockSet()->erase(it);
-    }
-    break;
-  default:
-    break;
+  switch (lock_mode) {
+    case LockManager::LockMode::EXCLUSIVE:
+      it = txn->GetExclusiveRowLockSet()->find(oid);
+      it->second.erase(it->second.find(rid));
+      if (it->second.empty()) {
+        txn->GetExclusiveRowLockSet()->erase(it);
+      }
+      break;
+    case LockManager::LockMode::SHARED:
+      it = txn->GetSharedRowLockSet()->find(oid);
+      it->second.erase(it->second.find(rid));
+      if (it->second.empty()) {
+        txn->GetSharedRowLockSet()->erase(it);
+      }
+      break;
+    default:
+      break;
   }
 }
 
@@ -116,7 +114,8 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
   /* validate legality of lock mode and transaction state */
   if (txn->GetIsolationLevel() == IsolationLevel::READ_UNCOMMITTED) {
     // S/IS/SIX locks are not required under READ_UNCOMMITTED
-    if (lock_mode == LockMode::SHARED || lock_mode == LockMode::SHARED_INTENTION_EXCLUSIVE || lock_mode == LockMode::INTENTION_SHARED) {
+    if (lock_mode == LockMode::SHARED || lock_mode == LockMode::SHARED_INTENTION_EXCLUSIVE ||
+        lock_mode == LockMode::INTENTION_SHARED) {
       txn->SetState(TransactionState::ABORTED);
       throw TransactionAbortException(txn->GetTransactionId(), AbortReason::LOCK_SHARED_ON_READ_UNCOMMITTED);
     }
@@ -153,7 +152,7 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
     if ((*req_it)->txn_id_ == txn->GetTransactionId()) {
       if (it->second->upgrading_ != INVALID_TXN_ID) {
         txn->SetState(TransactionState::ABORTED);
-          throw TransactionAbortException(txn->GetTransactionId(), AbortReason::UPGRADE_CONFLICT);
+        throw TransactionAbortException(txn->GetTransactionId(), AbortReason::UPGRADE_CONFLICT);
       }
 
       LockMode prev_lock_mode = (*req_it)->lock_mode_;
@@ -162,12 +161,13 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
       }
 
       if ((prev_lock_mode == LockMode::EXCLUSIVE) ||
-        (prev_lock_mode == LockMode::SHARED_INTENTION_EXCLUSIVE && lock_mode != LockMode::EXCLUSIVE) ||
-        (prev_lock_mode == LockMode::INTENTION_EXCLUSIVE && lock_mode != LockMode::EXCLUSIVE && lock_mode != LockMode::SHARED_INTENTION_EXCLUSIVE) ||
-        (prev_lock_mode == LockMode::SHARED && lock_mode != LockMode::EXCLUSIVE && lock_mode != LockMode::SHARED_INTENTION_EXCLUSIVE)
-      ) {
+          (prev_lock_mode == LockMode::SHARED_INTENTION_EXCLUSIVE && lock_mode != LockMode::EXCLUSIVE) ||
+          (prev_lock_mode == LockMode::INTENTION_EXCLUSIVE && lock_mode != LockMode::EXCLUSIVE &&
+           lock_mode != LockMode::SHARED_INTENTION_EXCLUSIVE) ||
+          (prev_lock_mode == LockMode::SHARED && lock_mode != LockMode::EXCLUSIVE &&
+           lock_mode != LockMode::SHARED_INTENTION_EXCLUSIVE)) {
         txn->SetState(TransactionState::ABORTED);
-          throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
+        throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
       }
 
       // do an upgrade
@@ -182,46 +182,63 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
     }
   }
 
-  switch (lock_mode)
-  {
-  case LockMode::EXCLUSIVE:
-    while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) 
-            || (!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(), [is_upgraded](LockRequest* req) {
-            return (is_upgraded && (req->granted_ == false)); })) // have another kind of lock
-            && txn->GetState() != TransactionState::ABORTED)) {
-      it->second->cv_.wait(req_queue_lock);
-    }
-    break;
-  case LockMode::SHARED:
-    while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) || ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(), [is_upgraded](LockRequest* req) {
-        return (is_upgraded && (req->granted_ == false)) || req->lock_mode_ == LockMode::SHARED || req->lock_mode_ == LockMode::INTENTION_SHARED; }))) // have another kind of lock
-        && txn->GetState() != TransactionState::ABORTED)) {
-      it->second->cv_.wait(req_queue_lock);
-    }
-    break;
-  case LockMode::INTENTION_EXCLUSIVE:
-    while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) || ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(), [is_upgraded](LockRequest* req) {
-        return (is_upgraded && (req->granted_ == false)) || req->lock_mode_ == LockMode::INTENTION_EXCLUSIVE || req->lock_mode_ == LockMode::INTENTION_SHARED; }))) // have another kind of lock
-        && txn->GetState() != TransactionState::ABORTED)) {
-      it->second->cv_.wait(req_queue_lock);
-    }
-    break;
-  case LockMode::INTENTION_SHARED:
-    while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) || ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(), [is_upgraded](LockRequest* req) {
-        return (is_upgraded && (req->granted_ == false)) || req->lock_mode_ != LockMode::EXCLUSIVE; }))) // have another kind of lock
-        && txn->GetState() != TransactionState::ABORTED)) {
-      it->second->cv_.wait(req_queue_lock);
-    }
-    break;
-  case LockMode::SHARED_INTENTION_EXCLUSIVE:
-    while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) || ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(), [is_upgraded](LockRequest* req) {
-        return (is_upgraded && (req->granted_ == false)) || req->lock_mode_ == LockMode::INTENTION_EXCLUSIVE; }))) // have another kind of lock
-        && txn->GetState() != TransactionState::ABORTED)) {
-      it->second->cv_.wait(req_queue_lock);
-    }
-    break;
-  default:
-    break;
+  switch (lock_mode) {
+    case LockMode::EXCLUSIVE:
+      while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
+             (!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(),
+                            [is_upgraded](LockRequest *req) {
+                              return (is_upgraded && (!(req->granted_)));
+                            }))  // have another kind of lock
+              && txn->GetState() != TransactionState::ABORTED)) {
+        it->second->cv_.wait(req_queue_lock);
+      }
+      break;
+    case LockMode::SHARED:
+      while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
+             ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(),
+                             [is_upgraded](LockRequest *req) {
+                               return (is_upgraded && (!(req->granted_))) || req->lock_mode_ == LockMode::SHARED ||
+                                      req->lock_mode_ == LockMode::INTENTION_SHARED;
+                             })))  // have another kind of lock
+              && txn->GetState() != TransactionState::ABORTED)) {
+        it->second->cv_.wait(req_queue_lock);
+      }
+      break;
+    case LockMode::INTENTION_EXCLUSIVE:
+      while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
+             ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(),
+                             [is_upgraded](LockRequest *req) {
+                               return (is_upgraded && (!(req->granted_))) ||
+                                      req->lock_mode_ == LockMode::INTENTION_EXCLUSIVE ||
+                                      req->lock_mode_ == LockMode::INTENTION_SHARED;
+                             })))  // have another kind of lock
+              && txn->GetState() != TransactionState::ABORTED)) {
+        it->second->cv_.wait(req_queue_lock);
+      }
+      break;
+    case LockMode::INTENTION_SHARED:
+      while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
+             ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(),
+                             [is_upgraded](LockRequest *req) {
+                               return (is_upgraded && (!(req->granted_))) || req->lock_mode_ != LockMode::EXCLUSIVE;
+                             })))  // have another kind of lock
+              && txn->GetState() != TransactionState::ABORTED)) {
+        it->second->cv_.wait(req_queue_lock);
+      }
+      break;
+    case LockMode::SHARED_INTENTION_EXCLUSIVE:
+      while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
+             ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(),
+                             [is_upgraded](LockRequest *req) {
+                               return (is_upgraded && (!(req->granted_))) ||
+                                      req->lock_mode_ == LockMode::INTENTION_EXCLUSIVE;
+                             })))  // have another kind of lock
+              && txn->GetState() != TransactionState::ABORTED)) {
+        it->second->cv_.wait(req_queue_lock);
+      }
+      break;
+    default:
+      break;
   }
 
   if (txn->GetState() == TransactionState::ABORTED) {
@@ -245,7 +262,8 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
 
 auto LockManager::UnlockTable(Transaction *txn, const table_oid_t &oid) -> bool {
   // check whether there are still rows being locked
-  if (!((txn->GetSharedRowLockSet()->empty() || (*txn->GetSharedRowLockSet())[oid].empty()) && (txn->GetExclusiveRowLockSet()->empty() || (*txn->GetExclusiveRowLockSet())[oid].empty()))) {
+  if (!((txn->GetSharedRowLockSet()->empty() || (*txn->GetSharedRowLockSet())[oid].empty()) &&
+        (txn->GetExclusiveRowLockSet()->empty() || (*txn->GetExclusiveRowLockSet())[oid].empty()))) {
     txn->SetState(TransactionState::ABORTED);
     throw TransactionAbortException(txn->GetTransactionId(), AbortReason::TABLE_UNLOCKED_BEFORE_UNLOCKING_ROWS);
   }
@@ -265,37 +283,31 @@ auto LockManager::UnlockTable(Transaction *txn, const table_oid_t &oid) -> bool 
     throw TransactionAbortException(txn->GetTransactionId(), AbortReason::ATTEMPTED_UNLOCK_BUT_NO_LOCK_HELD);
   }
 
-  LockMode lock_mode;
+  LockMode lock_mode = LockMode::SHARED;
 
-  for (auto req_it = it->second->request_queue_.begin(); req_it != it->second->request_queue_.end(); ) {
+  for (auto req_it = it->second->request_queue_.begin(); req_it != it->second->request_queue_.end();) {
     if ((*req_it)->txn_id_ == txn->GetTransactionId()) {
       BUSTUB_ASSERT((*req_it)->granted_, "Must have been granted in unlock function!");
       lock_mode = (*req_it)->lock_mode_;
       delete (*req_it);
       req_it = it->second->request_queue_.erase(req_it);
       break;
-    } else {
-      ++req_it;
     }
+    ++req_it;
   }
 
-  switch (txn->GetIsolationLevel())
-  {
-  case IsolationLevel::REPEATABLE_READ:
-    txn->SetState(TransactionState::SHRINKING);
-    break;
-  case IsolationLevel::READ_COMMITTED:
-    if (lock_mode == LockMode::EXCLUSIVE) {
+  switch (txn->GetIsolationLevel()) {
+    case IsolationLevel::REPEATABLE_READ:
       txn->SetState(TransactionState::SHRINKING);
-    }
-    break;
-  case IsolationLevel::READ_UNCOMMITTED:
-    if (lock_mode == LockMode::EXCLUSIVE) {
-      txn->SetState(TransactionState::SHRINKING);
-    }
-    break;
-  default:
-    break;
+      break;
+    case IsolationLevel::READ_COMMITTED:
+    case IsolationLevel::READ_UNCOMMITTED:
+      if (lock_mode == LockMode::EXCLUSIVE) {
+        txn->SetState(TransactionState::SHRINKING);
+      }
+      break;
+    default:
+      break;
   }
 
   EraseTransactionTableSetByLockMode(txn, lock_mode, oid);
@@ -306,11 +318,12 @@ auto LockManager::UnlockTable(Transaction *txn, const table_oid_t &oid) -> bool 
 
 auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_t &oid, const RID &rid) -> bool {
   /* validate legality of lock mode and transaction state */
-  if (lock_mode == LockMode::INTENTION_EXCLUSIVE || lock_mode == LockMode::INTENTION_SHARED || lock_mode == LockMode::SHARED_INTENTION_EXCLUSIVE) {
+  if (lock_mode == LockMode::INTENTION_EXCLUSIVE || lock_mode == LockMode::INTENTION_SHARED ||
+      lock_mode == LockMode::SHARED_INTENTION_EXCLUSIVE) {
     txn->SetState(TransactionState::ABORTED);
     throw TransactionAbortException(txn->GetTransactionId(), AbortReason::LOCK_SHARED_ON_READ_UNCOMMITTED);
   }
-  
+
   if (txn->GetIsolationLevel() == IsolationLevel::READ_UNCOMMITTED) {
     // S/IS/SIX locks are not required under READ_UNCOMMITTED
     if (lock_mode == LockMode::SHARED) {
@@ -340,15 +353,15 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
         (txn->GetIntentionSharedTableLockSet()->find(oid) != txn->GetIntentionSharedTableLockSet()->end()) ||
         (txn->GetExclusiveTableLockSet()->find(oid) != txn->GetExclusiveTableLockSet()->end()) ||
         (txn->GetIntentionExclusiveTableLockSet()->find(oid) != txn->GetIntentionExclusiveTableLockSet()->end()) ||
-        (txn->GetSharedIntentionExclusiveTableLockSet()->find(oid) != txn->GetSharedIntentionExclusiveTableLockSet()->end())
-    ) {
+        (txn->GetSharedIntentionExclusiveTableLockSet()->find(oid) !=
+         txn->GetSharedIntentionExclusiveTableLockSet()->end())) {
       holding_table_lock = true;
     }
   } else {
     if ((txn->GetExclusiveTableLockSet()->find(oid) != txn->GetExclusiveTableLockSet()->end()) ||
         (txn->GetIntentionExclusiveTableLockSet()->find(oid) != txn->GetIntentionExclusiveTableLockSet()->end()) ||
-        (txn->GetSharedIntentionExclusiveTableLockSet()->find(oid) != txn->GetSharedIntentionExclusiveTableLockSet()->end())
-    ) {
+        (txn->GetSharedIntentionExclusiveTableLockSet()->find(oid) !=
+         txn->GetSharedIntentionExclusiveTableLockSet()->end())) {
       holding_table_lock = true;
     }
   }
@@ -375,7 +388,7 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
     if ((*req_it)->txn_id_ == txn->GetTransactionId()) {
       if (it->second->upgrading_ != INVALID_TXN_ID) {
         txn->SetState(TransactionState::ABORTED);
-          throw TransactionAbortException(txn->GetTransactionId(), AbortReason::UPGRADE_CONFLICT);
+        throw TransactionAbortException(txn->GetTransactionId(), AbortReason::UPGRADE_CONFLICT);
       }
 
       LockMode prev_lock_mode = (*req_it)->lock_mode_;
@@ -383,9 +396,10 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
         return true;
       }
 
-      if ((prev_lock_mode == LockMode::EXCLUSIVE) || (prev_lock_mode == LockMode::SHARED && lock_mode != LockMode::EXCLUSIVE)) {
+      if ((prev_lock_mode == LockMode::EXCLUSIVE) ||
+          (prev_lock_mode == LockMode::SHARED && lock_mode != LockMode::EXCLUSIVE)) {
         txn->SetState(TransactionState::ABORTED);
-          throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
+        throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
       }
 
       // above has ensured that the valid table lock is held, so just do an upgrade is ok here
@@ -400,25 +414,29 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
     }
   }
 
-  switch (lock_mode)
-  {
-  case LockMode::EXCLUSIVE:
-    while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) 
-            || (!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(), [is_upgraded](LockRequest* req) {
-            return (is_upgraded && (req->granted_ == false)); })) // have another kind of lock
-            && txn->GetState() != TransactionState::ABORTED)) {
-      it->second->cv_.wait(req_queue_lock);
-    }
-    break;
-  case LockMode::SHARED:
-    while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) || ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(), [is_upgraded](LockRequest* req) {
-        return (is_upgraded && (req->granted_ == false)) || req->lock_mode_ == LockMode::SHARED; }))) // have another kind of lock
-        && txn->GetState() != TransactionState::ABORTED)) {
-      it->second->cv_.wait(req_queue_lock);
-    }
-    break;
-  default:
-    break;
+  switch (lock_mode) {
+    case LockMode::EXCLUSIVE:
+      while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
+             (!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(),
+                            [is_upgraded](LockRequest *req) {
+                              return (is_upgraded && (!(req->granted_)));
+                            }))  // have another kind of lock
+              && txn->GetState() != TransactionState::ABORTED)) {
+        it->second->cv_.wait(req_queue_lock);
+      }
+      break;
+    case LockMode::SHARED:
+      while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
+             ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(),
+                             [is_upgraded](LockRequest *req) {
+                               return (is_upgraded && (!(req->granted_))) || req->lock_mode_ == LockMode::SHARED;
+                             })))  // have another kind of lock
+              && txn->GetState() != TransactionState::ABORTED)) {
+        it->second->cv_.wait(req_queue_lock);
+      }
+      break;
+    default:
+      break;
   }
 
   if (txn->GetState() == TransactionState::ABORTED) {
@@ -455,18 +473,17 @@ auto LockManager::UnlockRow(Transaction *txn, const table_oid_t &oid, const RID 
     throw TransactionAbortException(txn->GetTransactionId(), AbortReason::ATTEMPTED_UNLOCK_BUT_NO_LOCK_HELD);
   }
 
-  LockMode lock_mode;
+  LockMode lock_mode = LockMode::SHARED;
 
-  for (auto req_it = it->second->request_queue_.begin(); req_it != it->second->request_queue_.end(); ) {
+  for (auto req_it = it->second->request_queue_.begin(); req_it != it->second->request_queue_.end();) {
     if ((*req_it)->txn_id_ == txn->GetTransactionId()) {
       BUSTUB_ASSERT((*req_it)->granted_, "Must have been granted in unlock function!");
       lock_mode = (*req_it)->lock_mode_;
       delete (*req_it);
       req_it = it->second->request_queue_.erase(req_it);
       break;
-    } else {
-      ++req_it;
     }
+    ++req_it;
   }
 
   // check whether holding the table lock
@@ -476,15 +493,15 @@ auto LockManager::UnlockRow(Transaction *txn, const table_oid_t &oid, const RID 
         (txn->GetIntentionSharedTableLockSet()->find(oid) != txn->GetIntentionSharedTableLockSet()->end()) ||
         (txn->GetExclusiveTableLockSet()->find(oid) != txn->GetExclusiveTableLockSet()->end()) ||
         (txn->GetIntentionExclusiveTableLockSet()->find(oid) != txn->GetIntentionExclusiveTableLockSet()->end()) ||
-        (txn->GetSharedIntentionExclusiveTableLockSet()->find(oid) != txn->GetSharedIntentionExclusiveTableLockSet()->end())
-    ) {
+        (txn->GetSharedIntentionExclusiveTableLockSet()->find(oid) !=
+         txn->GetSharedIntentionExclusiveTableLockSet()->end())) {
       holding_table_lock = true;
     }
   } else {
     if ((txn->GetExclusiveTableLockSet()->find(oid) != txn->GetExclusiveTableLockSet()->end()) ||
         (txn->GetIntentionExclusiveTableLockSet()->find(oid) != txn->GetIntentionExclusiveTableLockSet()->end()) ||
-        (txn->GetSharedIntentionExclusiveTableLockSet()->find(oid) != txn->GetSharedIntentionExclusiveTableLockSet()->end())
-    ) {
+        (txn->GetSharedIntentionExclusiveTableLockSet()->find(oid) !=
+         txn->GetSharedIntentionExclusiveTableLockSet()->end())) {
       holding_table_lock = true;
     }
   }
@@ -494,23 +511,18 @@ auto LockManager::UnlockRow(Transaction *txn, const table_oid_t &oid, const RID 
     throw TransactionAbortException(txn->GetTransactionId(), AbortReason::TABLE_UNLOCKED_BEFORE_UNLOCKING_ROWS);
   }
 
-  switch (txn->GetIsolationLevel())
-  {
-  case IsolationLevel::REPEATABLE_READ:
-    txn->SetState(TransactionState::SHRINKING);
-    break;
-  case IsolationLevel::READ_COMMITTED:
-    if (lock_mode == LockMode::EXCLUSIVE) {
+  switch (txn->GetIsolationLevel()) {
+    case IsolationLevel::REPEATABLE_READ:
       txn->SetState(TransactionState::SHRINKING);
-    }
-    break;
-  case IsolationLevel::READ_UNCOMMITTED:
-    if (lock_mode == LockMode::EXCLUSIVE) {
-      txn->SetState(TransactionState::SHRINKING);
-    }
-    break;
-  default:
-    break;
+      break;
+    case IsolationLevel::READ_COMMITTED:
+    case IsolationLevel::READ_UNCOMMITTED:
+      if (lock_mode == LockMode::EXCLUSIVE) {
+        txn->SetState(TransactionState::SHRINKING);
+      }
+      break;
+    default:
+      break;
   }
 
   EraseTransactionRowSetByLockMode(txn, lock_mode, oid, rid);
