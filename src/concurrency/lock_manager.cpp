@@ -129,7 +129,8 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
     }
 
     // X/IX locks on rows are not allowed if the the Transaction State is SHRINKING
-    if (lock_mode == LockMode::EXCLUSIVE || lock_mode == LockMode::INTENTION_EXCLUSIVE) {
+    if (lock_mode == LockMode::EXCLUSIVE || lock_mode == LockMode::INTENTION_EXCLUSIVE ||
+        lock_mode == LockMode::SHARED_INTENTION_EXCLUSIVE) {
       txn->SetState(TransactionState::ABORTED);
       throw TransactionAbortException(txn->GetTransactionId(), AbortReason::LOCK_ON_SHRINKING);
     }
@@ -182,58 +183,66 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
     }
   }
 
+  if (!is_upgraded) {
+    it->second->request_queue_.push_back(new LockRequest(txn->GetTransactionId(), lock_mode, oid));
+  }
+  auto req_it = std::prev(it->second->request_queue_.end());
+  if (is_upgraded) {
+    req_it = it->second->request_queue_.end();
+  }
+
   switch (lock_mode) {
     case LockMode::EXCLUSIVE:
-      while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
-             (!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(),
-                            [is_upgraded](LockRequest *req) {
-                              return (is_upgraded && (!(req->granted_)));
-                            }))  // have another kind of lock
-              && txn->GetState() != TransactionState::ABORTED)) {
+      while (((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
+              (!(std::all_of(it->second->request_queue_.begin(), req_it,
+                             [is_upgraded](LockRequest *req) {
+                               return (is_upgraded && (!(req->granted_)));
+                             }))))  // have another kind of lock
+             && txn->GetState() != TransactionState::ABORTED) {
         it->second->cv_.wait(req_queue_lock);
       }
       break;
     case LockMode::SHARED:
-      while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
-             ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(),
+      while (((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
+              (!(std::all_of(it->second->request_queue_.begin(), req_it,
                              [is_upgraded](LockRequest *req) {
                                return (is_upgraded && (!(req->granted_))) || req->lock_mode_ == LockMode::SHARED ||
                                       req->lock_mode_ == LockMode::INTENTION_SHARED;
-                             })))  // have another kind of lock
-              && txn->GetState() != TransactionState::ABORTED)) {
+                             }))))  // have another kind of lock
+             && txn->GetState() != TransactionState::ABORTED) {
         it->second->cv_.wait(req_queue_lock);
       }
       break;
     case LockMode::INTENTION_EXCLUSIVE:
-      while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
-             ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(),
+      while (((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
+              (!(std::all_of(it->second->request_queue_.begin(), req_it,
                              [is_upgraded](LockRequest *req) {
                                return (is_upgraded && (!(req->granted_))) ||
                                       req->lock_mode_ == LockMode::INTENTION_EXCLUSIVE ||
                                       req->lock_mode_ == LockMode::INTENTION_SHARED;
-                             })))  // have another kind of lock
-              && txn->GetState() != TransactionState::ABORTED)) {
+                             }))))  // have another kind of lock
+             && txn->GetState() != TransactionState::ABORTED) {
         it->second->cv_.wait(req_queue_lock);
       }
       break;
     case LockMode::INTENTION_SHARED:
-      while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
-             ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(),
+      while (((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
+              (!(std::all_of(it->second->request_queue_.begin(), req_it,
                              [is_upgraded](LockRequest *req) {
                                return (is_upgraded && (!(req->granted_))) || req->lock_mode_ != LockMode::EXCLUSIVE;
-                             })))  // have another kind of lock
-              && txn->GetState() != TransactionState::ABORTED)) {
+                             }))))  // have another kind of lock
+             && txn->GetState() != TransactionState::ABORTED) {
         it->second->cv_.wait(req_queue_lock);
       }
       break;
     case LockMode::SHARED_INTENTION_EXCLUSIVE:
-      while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
-             ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(),
+      while (((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
+              (!(std::all_of(it->second->request_queue_.begin(), req_it,
                              [is_upgraded](LockRequest *req) {
                                return (is_upgraded && (!(req->granted_))) ||
-                                      req->lock_mode_ == LockMode::INTENTION_EXCLUSIVE;
-                             })))  // have another kind of lock
-              && txn->GetState() != TransactionState::ABORTED)) {
+                                      req->lock_mode_ == LockMode::INTENTION_SHARED;
+                             }))))  // have another kind of lock
+             && txn->GetState() != TransactionState::ABORTED) {
         it->second->cv_.wait(req_queue_lock);
       }
       break;
@@ -242,17 +251,23 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
   }
 
   if (txn->GetState() == TransactionState::ABORTED) {
+    if (is_upgraded) {
+      it->second->upgrading_ = INVALID_TXN_ID;
+    } else {
+      delete (*req_it);
+      it->second->request_queue_.erase(req_it);
+    }
     it->second->cv_.notify_all();
     return false;
   }
 
-  auto new_req = new LockRequest(txn->GetTransactionId(), lock_mode, oid);
-  new_req->granted_ = true;
   if (is_upgraded) {
-    it->second->request_queue_.push_front(new_req);
+    auto upgraded_req = new LockRequest(txn->GetTransactionId(), lock_mode, oid);
+    upgraded_req->granted_ = true;
+    it->second->request_queue_.push_front(upgraded_req);
     it->second->upgrading_ = INVALID_TXN_ID;
   } else {
-    it->second->request_queue_.push_back(new_req);
+    (*req_it)->granted_ = true;
   }
 
   InsertTransactionTableSetByLockMode(txn, lock_mode, oid);
@@ -298,7 +313,9 @@ auto LockManager::UnlockTable(Transaction *txn, const table_oid_t &oid) -> bool 
 
   switch (txn->GetIsolationLevel()) {
     case IsolationLevel::REPEATABLE_READ:
-      txn->SetState(TransactionState::SHRINKING);
+      if (lock_mode == LockMode::EXCLUSIVE || lock_mode == LockMode::SHARED) {
+        txn->SetState(TransactionState::SHRINKING);
+      }
       break;
     case IsolationLevel::READ_COMMITTED:
     case IsolationLevel::READ_UNCOMMITTED:
@@ -414,24 +431,32 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
     }
   }
 
+  if (!is_upgraded) {
+    it->second->request_queue_.push_back(new LockRequest(txn->GetTransactionId(), lock_mode, oid, rid));
+  }
+  auto req_it = std::prev(it->second->request_queue_.end());
+  if (is_upgraded) {
+    req_it = it->second->request_queue_.end();
+  }
+
   switch (lock_mode) {
     case LockMode::EXCLUSIVE:
-      while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
-             (!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(),
-                            [is_upgraded](LockRequest *req) {
-                              return (is_upgraded && (!(req->granted_)));
-                            }))  // have another kind of lock
-              && txn->GetState() != TransactionState::ABORTED)) {
+      while (((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
+              (!(std::all_of(it->second->request_queue_.begin(), req_it,
+                             [is_upgraded](LockRequest *req) {
+                               return (is_upgraded && (!(req->granted_)));
+                             }))))  // have another kind of lock
+             && txn->GetState() != TransactionState::ABORTED) {
         it->second->cv_.wait(req_queue_lock);
       }
       break;
     case LockMode::SHARED:
-      while ((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
-             ((!(std::all_of(it->second->request_queue_.begin(), it->second->request_queue_.end(),
+      while (((it->second->upgrading_ != INVALID_TXN_ID && !is_upgraded) ||
+              (!(std::all_of(it->second->request_queue_.begin(), req_it,
                              [is_upgraded](LockRequest *req) {
                                return (is_upgraded && (!(req->granted_))) || req->lock_mode_ == LockMode::SHARED;
-                             })))  // have another kind of lock
-              && txn->GetState() != TransactionState::ABORTED)) {
+                             }))))  // have another kind of lock
+             && txn->GetState() != TransactionState::ABORTED) {
         it->second->cv_.wait(req_queue_lock);
       }
       break;
@@ -440,17 +465,23 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
   }
 
   if (txn->GetState() == TransactionState::ABORTED) {
+    if (is_upgraded) {
+      it->second->upgrading_ = INVALID_TXN_ID;
+    } else {
+      delete (*req_it);
+      it->second->request_queue_.erase(req_it);
+    }
     it->second->cv_.notify_all();
     return false;
   }
 
-  auto new_req = new LockRequest(txn->GetTransactionId(), lock_mode, oid, rid);
-  new_req->granted_ = true;
   if (is_upgraded) {
-    it->second->request_queue_.push_front(new_req);
+    auto upgraded_req = new LockRequest(txn->GetTransactionId(), lock_mode, oid, rid);
+    upgraded_req->granted_ = true;
+    it->second->request_queue_.push_front(upgraded_req);
     it->second->upgrading_ = INVALID_TXN_ID;
   } else {
-    it->second->request_queue_.push_back(new_req);
+    (*req_it)->granted_ = true;
   }
 
   InsertTransactionRowSetByLockMode(txn, lock_mode, oid, rid);
