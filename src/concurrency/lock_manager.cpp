@@ -200,6 +200,15 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
                              }))))  // have another kind of lock
              && txn->GetState() != TransactionState::ABORTED) {
         it->second->cv_.wait(req_queue_lock);
+        if (is_upgraded) {
+          req_it = it->second->request_queue_.end();
+        } else {
+          for (req_it = it->second->request_queue_.begin(); req_it != it->second->request_queue_.end(); ++req_it) {
+            if ((*req_it)->txn_id_ == txn->GetTransactionId()) {
+              break;
+            }
+          }
+        }
       }
       break;
     case LockMode::SHARED:
@@ -211,6 +220,15 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
                              }))))  // have another kind of lock
              && txn->GetState() != TransactionState::ABORTED) {
         it->second->cv_.wait(req_queue_lock);
+        if (is_upgraded) {
+          req_it = it->second->request_queue_.end();
+        } else {
+          for (req_it = it->second->request_queue_.begin(); req_it != it->second->request_queue_.end(); ++req_it) {
+            if ((*req_it)->txn_id_ == txn->GetTransactionId()) {
+              break;
+            }
+          }
+        }
       }
       break;
     case LockMode::INTENTION_EXCLUSIVE:
@@ -223,6 +241,15 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
                              }))))  // have another kind of lock
              && txn->GetState() != TransactionState::ABORTED) {
         it->second->cv_.wait(req_queue_lock);
+        if (is_upgraded) {
+          req_it = it->second->request_queue_.end();
+        } else {
+          for (req_it = it->second->request_queue_.begin(); req_it != it->second->request_queue_.end(); ++req_it) {
+            if ((*req_it)->txn_id_ == txn->GetTransactionId()) {
+              break;
+            }
+          }
+        }
       }
       break;
     case LockMode::INTENTION_SHARED:
@@ -233,6 +260,15 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
                              }))))  // have another kind of lock
              && txn->GetState() != TransactionState::ABORTED) {
         it->second->cv_.wait(req_queue_lock);
+        if (is_upgraded) {
+          req_it = it->second->request_queue_.end();
+        } else {
+          for (req_it = it->second->request_queue_.begin(); req_it != it->second->request_queue_.end(); ++req_it) {
+            if ((*req_it)->txn_id_ == txn->GetTransactionId()) {
+              break;
+            }
+          }
+        }
       }
       break;
     case LockMode::SHARED_INTENTION_EXCLUSIVE:
@@ -244,6 +280,15 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
                              }))))  // have another kind of lock
              && txn->GetState() != TransactionState::ABORTED) {
         it->second->cv_.wait(req_queue_lock);
+        if (is_upgraded) {
+          req_it = it->second->request_queue_.end();
+        } else {
+          for (req_it = it->second->request_queue_.begin(); req_it != it->second->request_queue_.end(); ++req_it) {
+            if ((*req_it)->txn_id_ == txn->GetTransactionId()) {
+              break;
+            }
+          }
+        }
       }
       break;
     default:
@@ -448,6 +493,15 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
                              }))))  // have another kind of lock
              && txn->GetState() != TransactionState::ABORTED) {
         it->second->cv_.wait(req_queue_lock);
+        if (is_upgraded) {
+          req_it = it->second->request_queue_.end();
+        } else {
+          for (req_it = it->second->request_queue_.begin(); req_it != it->second->request_queue_.end(); ++req_it) {
+            if ((*req_it)->txn_id_ == txn->GetTransactionId()) {
+              break;
+            }
+          }
+        }
       }
       break;
     case LockMode::SHARED:
@@ -458,6 +512,15 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
                              }))))  // have another kind of lock
              && txn->GetState() != TransactionState::ABORTED) {
         it->second->cv_.wait(req_queue_lock);
+        if (is_upgraded) {
+          req_it = it->second->request_queue_.end();
+        } else {
+          for (req_it = it->second->request_queue_.begin(); req_it != it->second->request_queue_.end(); ++req_it) {
+            if ((*req_it)->txn_id_ == txn->GetTransactionId()) {
+              break;
+            }
+          }
+        }
       }
       break;
     default:
