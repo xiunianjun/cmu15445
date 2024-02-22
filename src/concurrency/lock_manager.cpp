@@ -701,7 +701,7 @@ auto LockManager::HasCycle(txn_id_t *txn_id) -> bool {
   for (auto &wait_pair : waits_for_) {
     path.clear();
     visited.clear();
-    PrintGraph();
+    // PrintGraph();
     if (FindCycle(wait_pair.first, path, visited)) {
       goto HAS_CYCLE;
     }
@@ -736,48 +736,59 @@ void LockManager::RunCycleDetection() {
     {
       // TODO(students): detect deadlock
       // build wait-for graph
-      std::vector<txn_id_t> granted;
       std::unordered_map<txn_id_t, std::vector<std::shared_ptr<LockRequestQueue>>> sleep_for;
 
       table_lock_map_latch_.lock();
       for (auto &table_lock_pair : table_lock_map_) {
-        for (auto &req : table_lock_pair.second->request_queue_) {
-          if (req->granted_) {
-            granted.push_back(req->txn_id_);
+        for (auto &req_i : table_lock_pair.second->request_queue_) {
+          if (req_i->granted_) {
+            continue;
           }
-        }
 
-        for (auto &req : table_lock_pair.second->request_queue_) {
-          if (!(req->granted_)) {
-            for (auto &txn_id : granted) {
-              AddEdge(req->txn_id_, txn_id);
+          for (auto &req_j : table_lock_pair.second->request_queue_) {
+            if (req_i->txn_id_ == req_j->txn_id_) {
+              break;
             }
 
-            sleep_for[req->txn_id_].push_back(table_lock_pair.second);
+            if (req_j->granted_) {
+              if ((req_i->lock_mode_ == LockMode::SHARED && req_j->lock_mode_ != LockMode::INTENTION_SHARED &&
+                   req_j->lock_mode_ != LockMode::SHARED) ||
+                  (req_i->lock_mode_ == LockMode::EXCLUSIVE) || (req_j->lock_mode_ == LockMode::EXCLUSIVE) ||
+                  (req_i->lock_mode_ == LockMode::INTENTION_EXCLUSIVE &&
+                   req_j->lock_mode_ != LockMode::INTENTION_EXCLUSIVE &&
+                   req_j->lock_mode_ != LockMode::INTENTION_SHARED) ||
+                  (req_i->lock_mode_ == LockMode::SHARED_INTENTION_EXCLUSIVE &&
+                   req_j->lock_mode_ != LockMode::INTENTION_SHARED)) {
+                AddEdge(req_i->txn_id_, req_j->txn_id_);
+                sleep_for[req_i->txn_id_].push_back(table_lock_pair.second);
+              }
+            }
           }
         }
-        granted.clear();
       }
       table_lock_map_latch_.unlock();
 
       row_lock_map_latch_.lock();
       for (auto &row_lock_pair : row_lock_map_) {
-        for (auto &req : row_lock_pair.second->request_queue_) {
-          if (req->granted_) {
-            granted.push_back(req->txn_id_);
+        for (auto &req_i : row_lock_pair.second->request_queue_) {
+          if (req_i->granted_) {
+            continue;
           }
-        }
 
-        for (auto &req : row_lock_pair.second->request_queue_) {
-          if (!(req->granted_)) {
-            for (auto &txn_id : granted) {
-              AddEdge(req->txn_id_, txn_id);
+          for (auto &req_j : row_lock_pair.second->request_queue_) {
+            if (req_i->txn_id_ == req_j->txn_id_) {
+              break;
             }
 
-            sleep_for[req->txn_id_].push_back(row_lock_pair.second);
+            if (req_j->granted_) {
+              if ((req_i->lock_mode_ == LockMode::SHARED && req_j->lock_mode_ != LockMode::SHARED) ||
+                  (req_i->lock_mode_ == LockMode::EXCLUSIVE) || (req_j->lock_mode_ == LockMode::EXCLUSIVE)) {
+                AddEdge(req_i->txn_id_, req_j->txn_id_);
+                sleep_for[req_i->txn_id_].push_back(row_lock_pair.second);
+              }
+            }
           }
         }
-        granted.clear();
       }
       row_lock_map_latch_.unlock();
 
