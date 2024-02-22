@@ -645,26 +645,17 @@ void LockManager::UnlockAll() {
   row_lock_map_latch_.unlock();
 }
 
-void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) {
-  for (auto &v : waits_for_[t1]) {
-    if (v == t2) {
-      return ;
-    }
-  }
-
-  waits_for_[t1].push_back(t2);
-}
+void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) { waits_for_[t1].insert(t2); }
 
 void LockManager::RemoveEdge(txn_id_t t1, txn_id_t t2) {
-  for (auto it = waits_for_[t1].begin(); it != waits_for_[t1].end(); ++it) {
-    if (*it == t2) {
-      waits_for_[t1].erase(it);
-      return ;
-    }
+  auto it = waits_for_[t1].find(t2);
+  if (it != waits_for_[t1].end()) {
+    waits_for_[t1].erase(it);
   }
 }
 
-auto LockManager::FindCycle(txn_id_t source_txn, std::vector<txn_id_t> &path, std::unordered_set<txn_id_t> &visited) -> bool {
+auto LockManager::FindCycle(txn_id_t source_txn, std::vector<txn_id_t> &path, std::unordered_set<txn_id_t> &visited)
+    -> bool {
   if (visited.find(source_txn) != visited.end()) {  // has cycle
     // delete no-circle prefix
     for (auto it = path.begin(); it != path.end();) {
@@ -691,6 +682,14 @@ auto LockManager::FindCycle(txn_id_t source_txn, std::vector<txn_id_t> &path, st
   return false;
 }
 
+void LockManager::PrintGraph() {
+  printf("--------------------------\n");
+  for (auto &pair : GetEdgeList()) {
+    printf("(%d, %d)\n", pair.first, pair.second);
+  }
+  printf("--------------------------\n");
+}
+
 auto LockManager::HasCycle(txn_id_t *txn_id) -> bool {
   if (waits_for_.size() < 2) {
     return false;
@@ -698,10 +697,19 @@ auto LockManager::HasCycle(txn_id_t *txn_id) -> bool {
 
   std::vector<txn_id_t> path;
   std::unordered_set<txn_id_t> visited;
-  if (!(FindCycle(waits_for_.begin()->first, path, visited))) {
-    return false;
+
+  for (auto &wait_pair : waits_for_) {
+    path.clear();
+    visited.clear();
+    PrintGraph();
+    if (FindCycle(wait_pair.first, path, visited)) {
+      goto HAS_CYCLE;
+    }
   }
 
+  return false;
+
+HAS_CYCLE:
   *txn_id = *(path.begin());
   for (auto &id : path) {
     if (*txn_id < id) {
@@ -716,7 +724,7 @@ auto LockManager::GetEdgeList() -> std::vector<std::pair<txn_id_t, txn_id_t>> {
   std::vector<std::pair<txn_id_t, txn_id_t>> edges(0);
   for (auto &pair : waits_for_) {
     for (auto &edge : pair.second) {
-      edges.push_back(std::make_pair(pair.first, edge));
+      edges.emplace_back(pair.first, edge);
     }
   }
   return edges;
@@ -725,7 +733,7 @@ auto LockManager::GetEdgeList() -> std::vector<std::pair<txn_id_t, txn_id_t>> {
 void LockManager::RunCycleDetection() {
   while (enable_cycle_detection_) {
     std::this_thread::sleep_for(cycle_detection_interval);
-    {  
+    {
       // TODO(students): detect deadlock
       // build wait-for graph
       std::vector<txn_id_t> granted;
@@ -804,5 +812,4 @@ void LockManager::RunCycleDetection() {
     }
   }
 }
-
 }  // namespace bustub

@@ -12,7 +12,7 @@
 #include "gtest/gtest.h"
 
 namespace bustub {
-TEST(LockManagerDeadlockDetectionTest, DISABLED_EdgeTest) {
+TEST(LockManagerDeadlockDetectionTest, EdgeTest) {
   LockManager lock_mgr{};
   TransactionManager txn_mgr{&lock_mgr};
   lock_mgr.txn_manager_ = &txn_mgr;
@@ -56,7 +56,7 @@ TEST(LockManagerDeadlockDetectionTest, DISABLED_EdgeTest) {
   }
 }
 
-TEST(LockManagerDeadlockDetectionTest, DISABLED_BasicDeadlockDetectionTest) {
+TEST(LockManagerDeadlockDetectionTest, BasicDeadlockDetectionTest) {
   LockManager lock_mgr{};
   TransactionManager txn_mgr{&lock_mgr};
   lock_mgr.txn_manager_ = &txn_mgr;
@@ -116,5 +116,93 @@ TEST(LockManagerDeadlockDetectionTest, DISABLED_BasicDeadlockDetectionTest) {
 
   delete txn0;
   delete txn1;
+}
+
+TEST(LockManagerDeadlockDetectionTest, MutipleCircleDeadlockDetectionTest) {
+  LockManager lock_mgr{};
+  TransactionManager txn_mgr{&lock_mgr};
+  lock_mgr.txn_manager_ = &txn_mgr;
+  lock_mgr.StartDeadlockDetection();
+
+  int num_circle = 2;
+  std::vector<Transaction *> txns;
+  std::vector<table_oid_t> oids;
+  std::vector<RID> rids;
+  for (int i = 0; i < num_circle * 2; i++) {
+    txns.push_back(txn_mgr.Begin());
+    EXPECT_EQ(i, txns[i]->GetTransactionId());
+
+    RID rid{i, static_cast<uint32_t>(i)};
+    rids.push_back(rid);
+  }
+
+  for (int i = 0; i < num_circle; i++) {
+    table_oid_t oid{static_cast<uint32_t>(i)};
+    oids.push_back(oid);
+  }
+
+  auto task0 = [&](int txn_id) {
+    // Lock and sleep
+    bool res = lock_mgr.LockTable(txns[txn_id], LockManager::LockMode::INTENTION_EXCLUSIVE, oids[txn_id / 2]);
+    EXPECT_EQ(true, res);
+    printf("#####txn[%d] lock table %d row %d\n", txn_id, oids[txn_id / 2], txn_id);
+    res = lock_mgr.LockRow(txns[txn_id], LockManager::LockMode::EXCLUSIVE, oids[txn_id / 2], rids[txn_id]);
+    EXPECT_EQ(true, res);
+    EXPECT_EQ(TransactionState::GROWING, txns[txn_id]->GetState());
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    // This will block
+    printf("#####txn[%d] lock table %d row %d\n", txn_id, oids[txn_id / 2], txn_id + 1);
+    res = lock_mgr.LockRow(txns[txn_id], LockManager::LockMode::EXCLUSIVE, oids[txn_id / 2], rids[txn_id + 1]);
+    EXPECT_EQ(true, res);
+
+    lock_mgr.UnlockRow(txns[txn_id], oids[txn_id / 2], rids[txn_id + 1]);
+    lock_mgr.UnlockRow(txns[txn_id], oids[txn_id / 2], rids[txn_id]);
+    lock_mgr.UnlockTable(txns[txn_id], oids[txn_id / 2]);
+
+    txn_mgr.Commit(txns[txn_id]);
+    EXPECT_EQ(TransactionState::COMMITTED, txns[txn_id]->GetState());
+  };
+
+  auto task1 = [&](int txn_id) {
+    // Sleep so T0 can take necessary locks
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    bool res = lock_mgr.LockTable(txns[txn_id], LockManager::LockMode::INTENTION_EXCLUSIVE, oids[txn_id / 2]);
+    EXPECT_EQ(res, true);
+
+    printf("#####txn[%d] lock table %d row %d\n", txn_id, oids[txn_id / 2], txn_id);
+    res = lock_mgr.LockRow(txns[txn_id], LockManager::LockMode::EXCLUSIVE, oids[txn_id / 2], rids[txn_id]);
+    EXPECT_EQ(TransactionState::GROWING, txns[txn_id]->GetState());
+
+    // This will block
+    printf("#####txn[%d] lock table %d row %d\n", txn_id, oids[txn_id / 2], txn_id - 1);
+    res = lock_mgr.LockRow(txns[txn_id], LockManager::LockMode::EXCLUSIVE, oids[txn_id / 2], rids[txn_id - 1]);
+    EXPECT_EQ(res, false);
+
+    EXPECT_EQ(TransactionState::ABORTED, txns[txn_id]->GetState());
+    txn_mgr.Abort(txns[txn_id]);
+  };
+
+  std::vector<std::thread> threads;
+  threads.reserve(num_circle * 2);
+
+  for (int i = 0; i < num_circle * 2; i++) {
+    if (i % 2 == 0) {
+      threads.emplace_back(std::thread{task0, i});
+    } else {
+      threads.emplace_back(std::thread{task1, i});
+    }
+  }
+
+  // Sleep for enough time to break cycle
+  std::this_thread::sleep_for(cycle_detection_interval * 2);
+
+  for (int i = 0; i < num_circle * 2; i++) {
+    threads[i].join();
+  }
+
+  for (int i = 0; i < num_circle * 2; i++) {
+    delete txns[i];
+  }
 }
 }  // namespace bustub
