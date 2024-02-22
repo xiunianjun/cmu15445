@@ -645,21 +645,162 @@ void LockManager::UnlockAll() {
   row_lock_map_latch_.unlock();
 }
 
-void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) {}
+void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) {
+  for (auto &v : waits_for_[t1]) {
+    if (v == t2) {
+      return ;
+    }
+  }
 
-void LockManager::RemoveEdge(txn_id_t t1, txn_id_t t2) {}
+  waits_for_[t1].push_back(t2);
+}
 
-auto LockManager::HasCycle(txn_id_t *txn_id) -> bool { return false; }
+void LockManager::RemoveEdge(txn_id_t t1, txn_id_t t2) {
+  for (auto it = waits_for_[t1].begin(); it != waits_for_[t1].end(); ++it) {
+    if (*it == t2) {
+      waits_for_[t1].erase(it);
+      return ;
+    }
+  }
+}
+
+auto LockManager::FindCycle(txn_id_t source_txn, std::vector<txn_id_t> &path, std::unordered_set<txn_id_t> &visited) -> bool {
+  if (visited.find(source_txn) != visited.end()) {  // has cycle
+    // delete no-circle prefix
+    for (auto it = path.begin(); it != path.end();) {
+      if (*it == source_txn) {
+        break;
+      }
+
+      it = path.erase(it);
+    }
+    return true;
+  }
+
+  visited.insert(source_txn);
+  path.push_back(source_txn);
+
+  for (auto &edge : waits_for_[source_txn]) {
+    if (FindCycle(edge, path, visited)) {
+      return true;
+    }
+  }
+
+  visited.erase(visited.find(source_txn));
+  path.pop_back();
+  return false;
+}
+
+auto LockManager::HasCycle(txn_id_t *txn_id) -> bool {
+  if (waits_for_.size() < 2) {
+    return false;
+  }
+
+  std::vector<txn_id_t> path;
+  std::unordered_set<txn_id_t> visited;
+  if (!(FindCycle(waits_for_.begin()->first, path, visited))) {
+    return false;
+  }
+
+  *txn_id = *(path.begin());
+  for (auto &id : path) {
+    if (*txn_id < id) {
+      *txn_id = id;
+    }
+  }
+
+  return true;
+}
 
 auto LockManager::GetEdgeList() -> std::vector<std::pair<txn_id_t, txn_id_t>> {
   std::vector<std::pair<txn_id_t, txn_id_t>> edges(0);
+  for (auto &pair : waits_for_) {
+    for (auto &edge : pair.second) {
+      edges.push_back(std::make_pair(pair.first, edge));
+    }
+  }
   return edges;
 }
 
 void LockManager::RunCycleDetection() {
   while (enable_cycle_detection_) {
     std::this_thread::sleep_for(cycle_detection_interval);
-    {  // TODO(students): detect deadlock
+    {  
+      // TODO(students): detect deadlock
+      // build wait-for graph
+      std::vector<txn_id_t> granted;
+      std::unordered_map<txn_id_t, std::vector<std::shared_ptr<LockRequestQueue>>> sleep_for;
+
+      table_lock_map_latch_.lock();
+      for (auto &table_lock_pair : table_lock_map_) {
+        for (auto &req : table_lock_pair.second->request_queue_) {
+          if (req->granted_) {
+            granted.push_back(req->txn_id_);
+          }
+        }
+
+        for (auto &req : table_lock_pair.second->request_queue_) {
+          if (!(req->granted_)) {
+            for (auto &txn_id : granted) {
+              AddEdge(req->txn_id_, txn_id);
+            }
+
+            sleep_for[req->txn_id_].push_back(table_lock_pair.second);
+          }
+        }
+        granted.clear();
+      }
+      table_lock_map_latch_.unlock();
+
+      row_lock_map_latch_.lock();
+      for (auto &row_lock_pair : row_lock_map_) {
+        for (auto &req : row_lock_pair.second->request_queue_) {
+          if (req->granted_) {
+            granted.push_back(req->txn_id_);
+          }
+        }
+
+        for (auto &req : row_lock_pair.second->request_queue_) {
+          if (!(req->granted_)) {
+            for (auto &txn_id : granted) {
+              AddEdge(req->txn_id_, txn_id);
+            }
+
+            sleep_for[req->txn_id_].push_back(row_lock_pair.second);
+          }
+        }
+        granted.clear();
+      }
+      row_lock_map_latch_.unlock();
+
+      // detect cycle and abort txn
+      txn_id_t abort_txn;
+      while (HasCycle(&abort_txn)) {
+        // do an abort
+        auto txn = txn_manager_->GetTransaction(abort_txn);
+        txn->SetState(TransactionState::ABORTED);
+
+        // notify related txns
+        for (auto &lock_req : sleep_for[abort_txn]) {
+          lock_req->cv_.notify_all();
+        }
+        sleep_for.erase(sleep_for.find(abort_txn));
+
+        // delete all related edges
+        for (auto it = waits_for_.begin(); it != waits_for_.end();) {
+          if (it->first == abort_txn) {
+            it = waits_for_.erase(it);
+            continue;
+          }
+
+          RemoveEdge(it->first, abort_txn);
+
+          ++it;
+        }
+      }
+
+      // destory waot-for graph
+      waits_for_.clear();
     }
   }
 }
