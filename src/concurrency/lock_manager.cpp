@@ -167,8 +167,9 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
            lock_mode != LockMode::SHARED_INTENTION_EXCLUSIVE) ||
           (prev_lock_mode == LockMode::SHARED && lock_mode != LockMode::EXCLUSIVE &&
            lock_mode != LockMode::SHARED_INTENTION_EXCLUSIVE)) {
-        txn->SetState(TransactionState::ABORTED);
-        throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
+        return true;
+        // txn->SetState(TransactionState::ABORTED);
+        // throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
       }
 
       // do an upgrade
@@ -460,8 +461,9 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
 
       if ((prev_lock_mode == LockMode::EXCLUSIVE) ||
           (prev_lock_mode == LockMode::SHARED && lock_mode != LockMode::EXCLUSIVE)) {
-        txn->SetState(TransactionState::ABORTED);
-        throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
+        // txn->SetState(TransactionState::ABORTED);
+        // throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
+        return true;
       }
 
       // above has ensured that the valid table lock is held, so just do an upgrade is ok here
@@ -605,18 +607,20 @@ auto LockManager::UnlockRow(Transaction *txn, const table_oid_t &oid, const RID 
     throw TransactionAbortException(txn->GetTransactionId(), AbortReason::TABLE_UNLOCKED_BEFORE_UNLOCKING_ROWS);
   }
 
-  switch (txn->GetIsolationLevel()) {
-    case IsolationLevel::REPEATABLE_READ:
-      txn->SetState(TransactionState::SHRINKING);
-      break;
-    case IsolationLevel::READ_COMMITTED:
-    case IsolationLevel::READ_UNCOMMITTED:
-      if (lock_mode == LockMode::EXCLUSIVE) {
+  if (!force) {
+    switch (txn->GetIsolationLevel()) {
+      case IsolationLevel::REPEATABLE_READ:
         txn->SetState(TransactionState::SHRINKING);
-      }
-      break;
-    default:
-      break;
+        break;
+      case IsolationLevel::READ_COMMITTED:
+      case IsolationLevel::READ_UNCOMMITTED:
+        if (lock_mode == LockMode::EXCLUSIVE) {
+          txn->SetState(TransactionState::SHRINKING);
+        }
+        break;
+      default:
+        break;
+    }
   }
 
   EraseTransactionRowSetByLockMode(txn, lock_mode, oid, rid);

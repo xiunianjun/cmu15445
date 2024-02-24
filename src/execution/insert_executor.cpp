@@ -27,6 +27,9 @@ InsertExecutor::InsertExecutor(ExecutorContext *exec_ctx, const InsertPlanNode *
 InsertExecutor::~InsertExecutor() { delete one_value_schema_; }
 
 void InsertExecutor::Init() {
+  txn_ = exec_ctx_->GetTransaction();
+  exec_ctx_->GetLockManager()->LockTable(txn_, LockManager::LockMode::EXCLUSIVE, plan_->TableOid());
+
   // initialize
   child_executor_->Init();
   insert_num_ = 0;
@@ -43,7 +46,7 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *param_tuple, RID *param_rid) -
   Tuple tuple;
   RID rid;
   while (child_executor_->Next(&tuple, &rid)) {
-    rid = table_heap->InsertTuple(TupleMeta(), tuple).value();
+    rid = table_heap->InsertTuple(TupleMeta(), tuple, exec_ctx_->GetLockManager(), txn_, plan_->TableOid()).value();
     insert_num_++;
 
     // update indexes
