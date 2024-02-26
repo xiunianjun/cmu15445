@@ -46,12 +46,16 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *param_tuple, RID *param_rid) -
     auto meta = table_heap->GetTupleMeta(rid);
     meta.is_deleted_ = true;
     table_heap->UpdateTupleMeta(meta, rid);
+    exec_ctx_->GetTransaction()->AppendTableWriteRecord({plan_->TableOid(), rid, table_heap});
+
     // update indexes
     auto indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_);
     for (auto index_info : indexes) {
       index_info->index_->DeleteEntry(
           tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()), rid,
           exec_ctx_->GetTransaction());
+      exec_ctx_->GetTransaction()->AppendIndexWriteRecord(
+          {rid, plan_->TableOid(), WType::DELETE, tuple, index_info->index_oid_, exec_ctx_->GetCatalog()});
     }
 
     delete_num_++;

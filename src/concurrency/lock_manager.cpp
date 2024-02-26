@@ -167,9 +167,8 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
            lock_mode != LockMode::SHARED_INTENTION_EXCLUSIVE) ||
           (prev_lock_mode == LockMode::SHARED && lock_mode != LockMode::EXCLUSIVE &&
            lock_mode != LockMode::SHARED_INTENTION_EXCLUSIVE)) {
-        return true;
-        // txn->SetState(TransactionState::ABORTED);
-        // throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
+        txn->SetState(TransactionState::ABORTED);
+        throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
       }
 
       // do an upgrade
@@ -461,9 +460,8 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
 
       if ((prev_lock_mode == LockMode::EXCLUSIVE) ||
           (prev_lock_mode == LockMode::SHARED && lock_mode != LockMode::EXCLUSIVE)) {
-        // txn->SetState(TransactionState::ABORTED);
-        // throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
-        return true;
+        txn->SetState(TransactionState::ABORTED);
+        throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
       }
 
       // above has ensured that the valid table lock is held, so just do an upgrade is ok here
@@ -744,6 +742,7 @@ void LockManager::RunCycleDetection() {
 
       table_lock_map_latch_.lock();
       for (auto &table_lock_pair : table_lock_map_) {
+        table_lock_pair.second->latch_.lock();
         for (auto &req_i : table_lock_pair.second->request_queue_) {
           if (req_i->granted_) {
             continue;
@@ -769,11 +768,13 @@ void LockManager::RunCycleDetection() {
             }
           }
         }
+        table_lock_pair.second->latch_.unlock();
       }
       table_lock_map_latch_.unlock();
 
       row_lock_map_latch_.lock();
       for (auto &row_lock_pair : row_lock_map_) {
+        row_lock_pair.second->latch_.lock();
         for (auto &req_i : row_lock_pair.second->request_queue_) {
           if (req_i->granted_) {
             continue;
@@ -793,6 +794,7 @@ void LockManager::RunCycleDetection() {
             }
           }
         }
+        row_lock_pair.second->latch_.unlock();
       }
       row_lock_map_latch_.unlock();
 

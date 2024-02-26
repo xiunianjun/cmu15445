@@ -19,15 +19,30 @@ SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNod
 
 void SeqScanExecutor::Init() {
   txn_ = exec_ctx_->GetTransaction();
-  if (exec_ctx_->IsDelete()) {
-    exec_ctx_->GetLockManager()->LockTable(txn_, LockManager::LockMode::INTENTION_EXCLUSIVE, plan_->GetTableOid());
-  } else {
-    if (txn_->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
-      exec_ctx_->GetLockManager()->LockTable(txn_, LockManager::LockMode::INTENTION_SHARED, plan_->GetTableOid());
+  try {
+    if (txn_->GetExclusiveTableLockSet()->find(plan_->GetTableOid()) == txn_->GetExclusiveTableLockSet()->end()) {
+      bool lock_success = true;
+      if (exec_ctx_->IsDelete()) {
+        lock_success = exec_ctx_->GetLockManager()->LockTable(txn_, LockManager::LockMode::INTENTION_EXCLUSIVE,
+                                                              plan_->GetTableOid());
+      } else {
+        // is not read uncommitted and do not have a X lock
+        if (txn_->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
+          lock_success = exec_ctx_->GetLockManager()->LockTable(txn_, LockManager::LockMode::INTENTION_SHARED,
+                                                                plan_->GetTableOid());
+        }
+      }
+
+      if (!lock_success) {
+        throw ExecutionException("fail to get table lock in the seq-scan.");
+      }
     }
+  } catch (TransactionAbortException &e) {
+    throw ExecutionException("fail to get table lock in the seq-scan.");
   }
 
   table_iterator_ = std::make_unique<TableIterator>(
+      // exec_ctx_->GetCatalog()->GetTable(plan_->GetTableOid())->table_->MakeIterator());
       exec_ctx_->GetCatalog()->GetTable(plan_->GetTableOid())->table_->MakeEagerIterator());
 }
 
@@ -42,16 +57,28 @@ auto SeqScanExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
     }
 
     bool locked = false;
-    if (exec_ctx_->IsDelete()) {
-      exec_ctx_->GetLockManager()->LockRow(txn_, LockManager::LockMode::EXCLUSIVE, plan_->GetTableOid(),
-                                           table_iterator_->GetRID());
-      locked = true;
-    } else {
-      if (txn_->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
-        exec_ctx_->GetLockManager()->LockRow(txn_, LockManager::LockMode::SHARED, plan_->GetTableOid(),
-                                             table_iterator_->GetRID());
-        locked = true;
+    try {
+      if (txn_->GetExclusiveRowLockSet()->find(plan_->GetTableOid()) == txn_->GetExclusiveRowLockSet()->end()) {
+        bool lock_success = true;
+        if (exec_ctx_->IsDelete()) {
+          lock_success = exec_ctx_->GetLockManager()->LockRow(txn_, LockManager::LockMode::EXCLUSIVE,
+                                                              plan_->GetTableOid(), table_iterator_->GetRID());
+          locked = true;
+        } else {
+          // is not read uncommitted and do not have a X lock
+          if (txn_->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
+            lock_success = exec_ctx_->GetLockManager()->LockRow(txn_, LockManager::LockMode::SHARED,
+                                                                plan_->GetTableOid(), table_iterator_->GetRID());
+            locked = true;
+          }
+        }
+
+        if (!lock_success) {
+          throw ExecutionException("fail to get table lock in the seq-scan.");
+        }
       }
+    } catch (TransactionAbortException &e) {
+      throw ExecutionException("fail to get row lock in the seq-scan.");
     }
 
     auto tuple_pair = table_iterator_->GetTuple();
@@ -63,13 +90,21 @@ auto SeqScanExecutor::Next(Tuple *param_tuple, RID *param_rid) -> bool {
     if (tuple_meta.is_deleted_ || (plan_->filter_predicate_ != nullptr &&
                                    !(plan_->filter_predicate_->Evaluate(&tuple, GetOutputSchema()).GetAs<bool>()))) {
       if (locked) {
-        exec_ctx_->GetLockManager()->UnlockRow(txn_, plan_->GetTableOid(), rid, true);
+        try {
+          exec_ctx_->GetLockManager()->UnlockRow(txn_, plan_->GetTableOid(), rid, true);
+        } catch (TransactionAbortException &e) {
+          throw ExecutionException("fail to release row lock in the seq-scan.");
+        }
       }
       continue;
     }
 
-    if (!(exec_ctx_->IsDelete()) && txn_->GetIsolationLevel() == IsolationLevel::READ_COMMITTED) {
-      exec_ctx_->GetLockManager()->UnlockRow(txn_, plan_->GetTableOid(), rid, false);
+    if (locked && !(exec_ctx_->IsDelete()) && txn_->GetIsolationLevel() == IsolationLevel::READ_COMMITTED) {
+      try {
+        exec_ctx_->GetLockManager()->UnlockRow(txn_, plan_->GetTableOid(), rid, false);
+      } catch (TransactionAbortException &e) {
+        throw ExecutionException("fail to release row lock in the seq-scan in READ_COMMITTED level.");
+      }
     }
     break;
   }
