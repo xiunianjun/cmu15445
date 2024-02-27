@@ -100,11 +100,6 @@ auto Optimizer::CheckIfColumnConstantConjunction(const AbstractExpressionRef &ex
 }
 
 auto Optimizer::OptimizeSeqscanAsIndexScan(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef {
-  // the update case is too complex, so we simply choose not to perform optimization
-  if (plan->GetType() == PlanType::Update || plan->GetType() == PlanType::Delete) {
-    return plan;
-  }
-
   std::vector<AbstractPlanNodeRef> children;
   for (const auto &child : plan->GetChildren()) {
     children.emplace_back(OptimizeSeqscanAsIndexScan(child));

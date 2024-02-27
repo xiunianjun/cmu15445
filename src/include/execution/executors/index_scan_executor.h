@@ -45,7 +45,9 @@ class IndexScanExecutor : public AbstractExecutor {
  private:
   /** The index scan plan node to be executed. */
   const IndexScanPlanNode *plan_;
+  Transaction *txn_;
   TableInfo *table_info_;
+  table_oid_t table_oid_;
   std::unique_ptr<BPlusTreeIndexIteratorForTwoIntegerColumn> current_iterator_;
   std::unique_ptr<BPlusTreeIndexIteratorForTwoIntegerColumn> end_iterator_;
 };

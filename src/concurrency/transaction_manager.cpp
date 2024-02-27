@@ -37,18 +37,29 @@ void TransactionManager::Abort(Transaction *txn) {
     it->table_heap_->UpdateTupleMeta(meta, it->rid_);
   }
 
+  TableHeap *table_heap;
   for (auto it = txn->GetIndexWriteSet()->rbegin(); it != txn->GetIndexWriteSet()->rend(); ++it) {
     auto index_info = it->catalog_->GetIndex(it->index_oid_);
-    if (it->wtype_ == WType::DELETE) {
-      index_info->index_->InsertEntry(
-          it->tuple_.KeyFromTuple(it->catalog_->GetTable(it->table_oid_)->schema_, index_info->key_schema_,
-                                  index_info->index_->GetKeyAttrs()),
-          it->rid_, txn);
-    } else {
-      index_info->index_->DeleteEntry(
-          it->tuple_.KeyFromTuple(it->catalog_->GetTable(it->table_oid_)->schema_, index_info->key_schema_,
-                                  index_info->index_->GetKeyAttrs()),
-          it->rid_, txn);
+    switch (it->wtype_) {
+      case WType::DELETE:
+        index_info->index_->InsertEntry(
+            it->tuple_.KeyFromTuple(it->catalog_->GetTable(it->table_oid_)->schema_, index_info->key_schema_,
+                                    index_info->index_->GetKeyAttrs()),
+            it->rid_, txn);
+        break;
+      case WType::INSERT:
+        index_info->index_->DeleteEntry(
+            it->tuple_.KeyFromTuple(it->catalog_->GetTable(it->table_oid_)->schema_, index_info->key_schema_,
+                                    index_info->index_->GetKeyAttrs()),
+            it->rid_, txn);
+        break;
+      case WType::UPDATE:
+        // it's nothing to the order of UNDO update and others
+        table_heap = it->catalog_->GetTable(it->table_oid_)->table_.get();
+        table_heap->UpdateTupleInPlaceUnsafe(table_heap->GetTupleMeta(it->rid_), it->old_tuple_, it->rid_);
+        break;
+      default:
+        break;
     }
   }
 
