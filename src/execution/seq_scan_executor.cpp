@@ -19,30 +19,30 @@ SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNod
 
 void SeqScanExecutor::Init() {
   txn_ = exec_ctx_->GetTransaction();
+
+  bool lock_success = true;
   try {
-    if (txn_->GetExclusiveTableLockSet()->find(plan_->GetTableOid()) == txn_->GetExclusiveTableLockSet()->end()) {
-      bool lock_success = true;
-      if (exec_ctx_->IsDelete()) {
-        lock_success = exec_ctx_->GetLockManager()->LockTable(txn_, LockManager::LockMode::INTENTION_EXCLUSIVE,
-                                                              plan_->GetTableOid());
-      } else {
-        // is not read uncommitted and do not have a X lock
+    if (exec_ctx_->IsDelete()) {
+      lock_success = exec_ctx_->GetLockManager()->LockTable(txn_, LockManager::LockMode::INTENTION_EXCLUSIVE,
+                                                            plan_->GetTableOid());
+    } else {
+      // is not read uncommitted and do not have a X lock
+      if (txn_->GetIntentionExclusiveTableLockSet()->find(plan_->GetTableOid()) ==
+          txn_->GetIntentionExclusiveTableLockSet()->end()) {
         if (txn_->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
           lock_success = exec_ctx_->GetLockManager()->LockTable(txn_, LockManager::LockMode::INTENTION_SHARED,
                                                                 plan_->GetTableOid());
         }
       }
-
-      if (!lock_success) {
-        throw ExecutionException("fail to get table lock in the seq-scan.");
-      }
     }
   } catch (TransactionAbortException &e) {
     throw ExecutionException("fail to get table lock in the seq-scan.");
   }
+  if (!lock_success) {
+    throw ExecutionException("fail to get table lock in the seq-scan.");
+  }
 
   table_iterator_ = std::make_unique<TableIterator>(
-      // exec_ctx_->GetCatalog()->GetTable(plan_->GetTableOid())->table_->MakeIterator());
       exec_ctx_->GetCatalog()->GetTable(plan_->GetTableOid())->table_->MakeEagerIterator());
 }
 
